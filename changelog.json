@@ -3,6 +3,27 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.2.2",
+      "date": "2026-10-10",
+      "kind": "beta",
+      "en": {
+        "headline": "Equal-sized buttons",
+        "notes": [
+          "The buttons on the main screen are now all the same size. Previously each one was sized to fit its own wording, so they looked uneven.",
+          "Switching between English and Chinese no longer changes the size of any button, and no longer shifts the layout.",
+          "This applies to the three main buttons, the buttons down the side of each screen, the Excel Columns button, and the Choose File/Folder buttons."
+        ]
+      },
+      "zh": {
+        "headline": "按钮尺寸统一",
+        "notes": [
+          "主界面的按钮现在大小一致。此前每个按钮会按自身文字调整宽度，因此看起来参差不齐。",
+          "在中英文之间切换时，按钮尺寸不再改变，界面布局也不会移位。",
+          "此修正适用于三个主按钮、各页面侧边的按钮、\u201cExcel 列设置\u201d按钮，以及\u201c选择文件/文件夹\u201d按钮。"
+        ]
+      }
+    },
+    {
       "version": "0.2.1",
       "date": "2026-10-10",
       "kind": "beta",

@@ -24,6 +24,34 @@ behaviour can still change between versions.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
 
+## [0.2.2] - 2026-10-10
+
+### Fixed
+
+- **Buttons are all the same size, and none of them changes size when the
+  language is switched.** Each button previously sized itself to its own label,
+  so buttons in a column came out ragged - "Unlock PDFs" was narrower than
+  "Fill Driver Numbers" - and because the longest label differs per language,
+  the whole layout shifted on a language change.
+- Buttons that a language switch did resize: the three workflow buttons, the
+  action columns on all three screens, the `Excel Columns` button, and the
+  `Choose Excel` / `Choose PDF Folder` / `Choose Image Folder` file pickers.
+  All are now measured against **every** language, not just the active one, and
+  given a shared width, so the text can change without the layout moving.
+
+### Technical notes
+
+Two Tk behaviours had to be worked around, both verified against the running app
+rather than assumed:
+
+- A button's `width` option counts *characters*, not pixels, and the conversion
+  depends on the font. Passing a pixel figure straight through asked for a
+  button hundreds of characters wide.
+- `width` is a **minimum**, not a fixed size. A button whose label was narrower
+  than that minimum was *not* padded out to it, and one whose label was wider
+  still grew. Setting a minimum alone therefore cannot make a row of buttons
+  match; the buttons also have to be stretched to fill their column.
+
 ## [0.2.1] - 2026-10-10
 
 ### Changed

@@ -92,6 +92,43 @@ CONTAINER_CHECK_VALUES = {
 LOGO_FILE_NAME = "UniTrans Logo.png"
 # APP_VERSION now lives in version.py so the build script and the app cannot
 # disagree about which release this is.
+
+#: Labels whose buttons are given one shared width, so they line up as a block
+#: and do not resize when the language changes. Measured across every language,
+#: not just the active one - see WaybillSorterApp._action_button_width.
+ACTION_BUTTON_KEYS = frozenset({
+    # Workflow selector
+    "workflow_sort",
+    "workflow_driver",
+    "workflow_unlock",
+    # Sort screen
+    "sort",
+    "make_pdf",
+    "open_output",
+    "options",
+    "clear_log",
+    "excel_columns",
+    # Driver screen
+    "fill_driver_numbers",
+    # Unlock screen
+    "unlock_pdfs",
+    # Dialogs
+    "back_to_workflows",
+    "settings_check_now",
+    "settings_close",
+    "close_options",
+    "apply",
+    "cancel",
+    "update_download",
+    "update_later",
+    # File-picker buttons in the path rows. These sit above a wide entry box,
+    # so they are the same width as each other rather than as the tall action
+    # buttons. Note the two distinct "folder" labels.
+    "choose_excel",
+    "choose_folder",
+    "choose_images",
+})
+
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 HEADER_ALIASES = {
     SEQ_HEADER: (SEQ_HEADER, "\u5e8f\u865f", "\u7f16\u53f7", "\u7de8\u865f"),
@@ -2478,7 +2515,15 @@ class WaybillSorterApp(tk.Tk):
         body.pack(fill=tk.BOTH, expand=True, padx=16, pady=(8, 14))
         return shell, body
 
-    def _primary_button(self, parent: tk.Widget, text: str, command: Callable[[], None], compact: bool = False) -> tk.Button:
+    def _primary_button(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None],
+        compact: bool = False,
+        label_key: str | None = None,
+    ) -> tk.Button:
+        uniform = self._uniform_width(label_key)
         return tk.Button(
             parent,
             text=text,
@@ -2500,6 +2545,9 @@ class WaybillSorterApp(tk.Tk):
             takefocus=0,
             padx=18 if compact else 22,
             pady=9 if compact else 12,
+            # A shared width keeps sibling buttons equal and stops the layout
+            # resizing when the language changes.
+            width=uniform if uniform else 0,
             font=("Segoe UI", 11 if compact else 12, "bold"),
             cursor="hand2",
         )
@@ -2522,7 +2570,120 @@ class WaybillSorterApp(tk.Tk):
         except tk.TclError:
             return False
 
-    def _secondary_button(self, parent: tk.Widget, text: str, command: Callable[[], None]) -> tk.Button:
+    def _action_button_width(self, compact: bool = False) -> int:
+        """One pixel width that fits every button label, in every language.
+
+        Without this each button sizes to its own text, so they come out
+        different widths - and because the longest label differs per language,
+        whole columns resize when the language is switched. Measuring the
+        widest label across all languages and reusing that width keeps the
+        buttons equal and stops the layout shifting.
+
+        The full-size and compact (path-row) buttons are measured against both
+        fonts so neither category can clip, which also makes every button in
+        the app the same width as every other. Cached, because the measurement
+        does not depend on the active language.
+        """
+        cached = getattr(self, "_action_width_cache", None)
+        if cached is not None:
+            return cached
+
+        try:
+            from tkinter import font as tkfont
+
+            fonts = [
+                tkfont.Font(root=self, font=("Segoe UI", 12, "bold")),
+                tkfont.Font(root=self, font=("Segoe UI", 11, "bold")),
+            ]
+            widest = 0
+            for language in I18N.values():
+                for key in ACTION_BUTTON_KEYS:
+                    text = str(language.get(key, ""))
+                    if not text:
+                        continue
+                    for font in fonts:
+                        widest = max(
+                            widest,
+                            font.measure(text),
+                            # The back button carries a leading arrow.
+                            font.measure(f"\u2190  {text}"),
+                        )
+            # 22px padding each side in the factory, plus slack so a font
+            # substitution on another machine cannot clip the longest label.
+            width = widest + 44 + 8
+        except Exception:
+            width = 0
+
+        width = max(160, min(width, 340))
+        self._action_width_cache = width
+        return width
+
+    def _uniform_width(self, key: str | None) -> int | None:
+        """Width for a button labelled ``key``, in Tk's button width units.
+
+        Tk's ``width`` option on a button counts *characters*, not pixels, and
+        Tk treats it as a **minimum**, not a fixed size: a button whose label is
+        wider still grows, and one whose label is narrower is *not* padded out
+        to it. So this alone cannot make a row of buttons match - the shorter
+        labels come out narrower. It sets the floor; ``_stack_button`` supplies
+        the fill that makes every button in a column the same width.
+
+        Primary and secondary buttons use different font sizes, so each is
+        calibrated separately; combining the floor here with the fill there is
+        what makes them come out the same number of pixels wide.
+        """
+        if key not in ACTION_BUTTON_KEYS:
+            return None
+
+        pixel_target = self._action_button_width()
+        try:
+            from tkinter import font as tkfont
+
+            # Calibrate against 100 "M"s so the per-character average is stable.
+            probe = tkfont.Font(root=self, font=("Segoe UI", 12, "bold"))
+            per_char = max(1.0, probe.measure("M" * 100) / 100.0)
+        except Exception:
+            per_char = 11.0
+
+        units = max(8, int(round(pixel_target / per_char)))
+        return units
+
+    def _stack_button(
+        self,
+        parent: tk.Widget,
+        row: int,
+        text: str,
+        command: Callable[[], None],
+        label_key: str | None = None,
+        primary: bool = True,
+        compact: bool = False,
+        pady: tuple[int, int] = (0, 8),
+    ) -> tk.Button:
+        """Place a button in a vertical stack, stretched to the stack's width.
+
+        Each button takes its own grid row with ``sticky="ew"`` while the
+        stack's single column carries the weight, so every button adopts the
+        width of the widest one in that stack. Together with the minimum from
+        ``_uniform_width`` this is what makes a column of buttons genuinely
+        equal in size.
+        """
+        parent.columnconfigure(0, weight=1)
+        button = (
+            self._primary_button(parent, text, command, compact=compact, label_key=label_key)
+            if primary
+            else self._secondary_button(parent, text, command, label_key=label_key)
+        )
+        button.grid(row=row, column=0, sticky="ew", pady=pady)
+        return button
+
+    def _secondary_button(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None],
+        label_key: str | None = None,
+    ) -> tk.Button:
+        uniform = self._uniform_width(label_key)
         return tk.Button(
             parent,
             text=text,
@@ -2537,8 +2698,11 @@ class WaybillSorterApp(tk.Tk):
             # box around the button.
             highlightthickness=0,
             takefocus=0,
-            padx=16,
+            # 17px keeps the total height and text inset in step with a primary
+            # button so the shared width produces equal-sized buttons.
+            padx=17,
             pady=9,
+            width=uniform if uniform else 0,
             font=("Segoe UI", 11, "bold"),
             cursor="hand2",
         )
@@ -2564,6 +2728,7 @@ class WaybillSorterApp(tk.Tk):
             takefocus=0,
             padx=20,
             pady=11,
+            width=self._uniform_width("back_to_workflows") or 0,
             font=("Segoe UI", 11, "bold"),
             cursor="hand2",
         )
@@ -2582,8 +2747,28 @@ class WaybillSorterApp(tk.Tk):
         except Exception:
             return None
 
-    def _path_row(self, parent: tk.Widget, button_text: str, command: Callable[[], None], variable: tk.StringVar) -> None:
-        self._primary_button(parent, button_text, command, compact=True).grid(row=0, column=0, sticky="w", padx=(0, 10))
+    def _path_row(
+        self,
+        parent: tk.Widget,
+        button_text: str,
+        command: Callable[[], None],
+        variable: tk.StringVar,
+        label_key: str | None = None,
+    ) -> None:
+        button = self._primary_button(
+            parent, button_text, command, compact=True, label_key=label_key
+        )
+        # Width 0 removes the character-count floor. Tk's width option is a
+        # *minimum*, and for this smaller font it lands above the shared target
+        # - which would make these buttons wider than the rest of the column.
+        # The column is given the target as a minimum size instead and the
+        # button stretched across it, so they match the taller action buttons
+        # exactly whatever the font.
+        button.configure(width=0)
+        target = self._action_button_width() if self._uniform_width(label_key) else 0
+        button.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        if target:
+            parent.columnconfigure(0, minsize=target, weight=0)
         entry = tk.Entry(
             parent,
             textvariable=variable,
@@ -2722,9 +2907,13 @@ class WaybillSorterApp(tk.Tk):
         title: str,
         description: str,
         command: Callable[[], None],
+        button_key: str | None = None,
     ) -> None:
         shell = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#D5DCE7", highlightthickness=1)
         shell.grid(row=row, column=0, sticky="ew", pady=(0, 14))
+        # The text column absorbs spare width; the button column keeps the
+        # fixed button width, so the three cards line up and the layout does
+        # not shift when the language changes.
         shell.columnconfigure(0, weight=1)
         tk.Label(
             shell,
@@ -2744,7 +2933,9 @@ class WaybillSorterApp(tk.Tk):
             justify="left",
             wraplength=700,
         ).grid(row=1, column=0, sticky="ew", padx=18, pady=(0, 16))
-        self._primary_button(shell, title, command).grid(row=0, column=1, rowspan=2, sticky="e", padx=18)
+        self._primary_button(shell, title, command, label_key=button_key).grid(
+            row=0, column=1, rowspan=2, sticky="nsew", padx=18, pady=16
+        )
 
     def _build_workflow_selector(self) -> None:
         self.current_workflow = "selector"
@@ -2765,6 +2956,7 @@ class WaybillSorterApp(tk.Tk):
             self.tr("workflow_sort"),
             self.tr("workflow_sort_desc"),
             self.select_sort_workflow,
+            button_key="workflow_sort",
         )
         self._workflow_choice(
             choices,
@@ -2772,6 +2964,7 @@ class WaybillSorterApp(tk.Tk):
             self.tr("workflow_driver"),
             self.tr("workflow_driver_desc"),
             self.select_driver_workflow,
+            button_key="workflow_driver",
         )
         self._workflow_choice(
             choices,
@@ -2779,6 +2972,7 @@ class WaybillSorterApp(tk.Tk):
             self.tr("workflow_unlock"),
             self.tr("workflow_unlock_desc"),
             self.select_unlock_workflow,
+            button_key="workflow_unlock",
         )
         self._build_footer(root)
 
@@ -2823,7 +3017,10 @@ class WaybillSorterApp(tk.Tk):
 
         folder_shell, folder_body = self._card(outer, self.tr("section_unlock_pdf"))
         folder_shell.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        self._path_row(folder_body, self.tr("choose_folder"), self.choose_unlock_pdf_folder, self.unlock_folder_path)
+        self._path_row(
+            folder_body, self.tr("choose_folder"), self.choose_unlock_pdf_folder,
+            self.unlock_folder_path, label_key="choose_folder",
+        )
         self._stat(folder_body, 1, self.tr("pdf_files"), self.unlock_pdf_count)
 
         lower = tk.Frame(outer, bg="#E8EDF4")
@@ -2836,11 +3033,29 @@ class WaybillSorterApp(tk.Tk):
         actions_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
         action_stack = tk.Frame(actions_body, bg="#FFFFFF")
         action_stack.grid(row=0, column=0, sticky="ew")
-        self.unlock_button = self._primary_button(action_stack, self.tr("unlock_pdfs"), self.start_unlock_pdfs)
-        self.unlock_button.pack(fill=tk.X, pady=(0, 8))
-        self.unlock_open_output_button = self._primary_button(action_stack, self.tr("open_output"), self.open_unlock_output)
-        self.unlock_open_output_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
+        self.unlock_button = self._stack_button(
+            action_stack,
+            1,
+            self.tr("unlock_pdfs"),
+            self.start_unlock_pdfs,
+            label_key="unlock_pdfs",
+        )
+        self.unlock_open_output_button = self._stack_button(
+            action_stack,
+            2,
+            self.tr("open_output"),
+            self.open_unlock_output,
+            label_key="open_output",
+        )
+        self._stack_button(
+            action_stack,
+            3,
+            self.tr("clear_log"),
+            self.clear_log,
+            label_key="clear_log",
+            primary=False,
+            pady=(0, 0),
+        )
 
         self._build_log_panel(lower)
         self.update_action_state()
@@ -2866,13 +3081,19 @@ class WaybillSorterApp(tk.Tk):
 
         excel_shell, excel_body = self._card(top_grid, self.tr("section_driver_excel"))
         excel_shell.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._path_row(excel_body, self.tr("choose_excel"), self.choose_driver_excel, self.driver_excel_path)
+        self._path_row(
+            excel_body, self.tr("choose_excel"), self.choose_driver_excel,
+            self.driver_excel_path, label_key="choose_excel",
+        )
         self._stat(excel_body, 1, self.tr("container_rows"), self.driver_row_count)
         self._stat(excel_body, 2, self.tr("blank_car_numbers"), self.driver_blank_count)
 
         image_shell, image_body = self._card(top_grid, self.tr("section_driver_images"))
         image_shell.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        self._path_row(image_body, self.tr("choose_images"), self.choose_driver_image_folder, self.driver_image_folder)
+        self._path_row(
+            image_body, self.tr("choose_images"), self.choose_driver_image_folder,
+            self.driver_image_folder, label_key="choose_images",
+        )
         self._stat(image_body, 1, self.tr("driver_images"), self.driver_image_count)
 
         lower = tk.Frame(outer, bg="#E8EDF4")
@@ -2885,11 +3106,29 @@ class WaybillSorterApp(tk.Tk):
         actions_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
         action_stack = tk.Frame(actions_body, bg="#FFFFFF")
         action_stack.grid(row=0, column=0, sticky="ew")
-        self.driver_fill_button = self._primary_button(action_stack, self.tr("fill_driver_numbers"), self.start_driver_fill)
-        self.driver_fill_button.pack(fill=tk.X, pady=(0, 8))
-        self.driver_open_output_button = self._primary_button(action_stack, self.tr("open_output"), self.open_driver_output)
-        self.driver_open_output_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
+        self.driver_fill_button = self._stack_button(
+            action_stack,
+            4,
+            self.tr("fill_driver_numbers"),
+            self.start_driver_fill,
+            label_key="fill_driver_numbers",
+        )
+        self.driver_open_output_button = self._stack_button(
+            action_stack,
+            5,
+            self.tr("open_output"),
+            self.open_driver_output,
+            label_key="open_output",
+        )
+        self._stack_button(
+            action_stack,
+            6,
+            self.tr("clear_log"),
+            self.clear_log,
+            label_key="clear_log",
+            primary=False,
+            pady=(0, 0),
+        )
 
         self._build_log_panel(lower)
         self.update_action_state()
@@ -2924,20 +3163,35 @@ class WaybillSorterApp(tk.Tk):
 
         excel_shell, excel_body = self._card(top_grid, self.tr("section_excel"))
         excel_shell.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self._path_row(excel_body, self.tr("choose_excel"), self.choose_excel, self.excel_path)
+        self._path_row(
+            excel_body, self.tr("choose_excel"), self.choose_excel,
+            self.excel_path, label_key="choose_excel",
+        )
         self._stat(excel_body, 1, self.tr("copy_amount"), self.copy_amount)
         self._stat(excel_body, 2, self.tr("container_rows"), self.container_count)
-        self._secondary_button(excel_body, self.tr("excel_columns"), self.open_excel_columns_dialog).grid(
+        # Sits below the two stat rows, in column 0 only. The column carries no
+        # weight, so it takes the width the button asks for - which is the
+        # shared action-button width - and "ew" makes the button fill it. That
+        # lines it up with the action buttons rather than shrinking to its own
+        # label or stretching across the whole card.
+        excel_columns_button = self._secondary_button(
+            excel_body, self.tr("excel_columns"), self.open_excel_columns_dialog,
+            label_key="excel_columns",
+        )
+        excel_body.columnconfigure(0, weight=0)
+        excel_columns_button.grid(
             row=3,
             column=0,
-            columnspan=2,
-            sticky="w",
+            sticky="ew",
             pady=(14, 0),
         )
 
         pdf_shell, pdf_body = self._card(top_grid, self.tr("section_pdf"))
         pdf_shell.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
-        self._path_row(pdf_body, self.tr("choose_folder"), self.choose_pdf_folder, self.pdf_folder)
+        self._path_row(
+            pdf_body, self.tr("choose_folder"), self.choose_pdf_folder,
+            self.pdf_folder, label_key="choose_folder",
+        )
         self._stat(pdf_body, 1, self.tr("pdf_files"), self.pdf_count)
         self._stat(pdf_body, 2, self.tr("pdf_page_check"), self.pdf_page_check)
 
@@ -2951,15 +3205,44 @@ class WaybillSorterApp(tk.Tk):
         options_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
         action_stack = tk.Frame(options_body, bg="#FFFFFF")
         action_stack.grid(row=0, column=0, sticky="ew")
-        self.sort_button = self._primary_button(action_stack, self.tr("sort"), self.start_sort)
-        self.sort_button.pack(fill=tk.X, pady=(0, 8))
-        self.make_pdf_button = self._primary_button(action_stack, self.tr("make_pdf"), self.create_print_pdf)
-        self.make_pdf_button.pack(fill=tk.X, pady=(0, 8))
-        self.open_output_button = self._primary_button(action_stack, self.tr("open_output"), self.open_output)
-        self.open_output_button.pack(fill=tk.X, pady=(0, 8))
-        self.options_button = self._secondary_button(action_stack, self.tr("options"), self.open_options)
-        self.options_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
+        self.sort_button = self._stack_button(
+            action_stack,
+            7,
+            self.tr("sort"),
+            self.start_sort,
+            label_key="sort",
+        )
+        self.make_pdf_button = self._stack_button(
+            action_stack,
+            8,
+            self.tr("make_pdf"),
+            self.create_print_pdf,
+            label_key="make_pdf",
+        )
+        self.open_output_button = self._stack_button(
+            action_stack,
+            9,
+            self.tr("open_output"),
+            self.open_output,
+            label_key="open_output",
+        )
+        self.options_button = self._stack_button(
+            action_stack,
+            10,
+            self.tr("options"),
+            self.open_options,
+            label_key="options",
+            primary=False,
+        )
+        self._stack_button(
+            action_stack,
+            11,
+            self.tr("clear_log"),
+            self.clear_log,
+            label_key="clear_log",
+            primary=False,
+            pady=(0, 0),
+        )
 
         log_shell, log_body = self._card(lower, self.tr("section_log"))
         log_shell.grid(row=0, column=1, sticky="nsew")
@@ -3172,8 +3455,14 @@ class WaybillSorterApp(tk.Tk):
             anchor="w",
             selectcolor="#FFFFFF",
         ).pack(fill=tk.X, pady=(0, 18))
-        close_button = self._primary_button(body, self.tr("close_options"), window.destroy)
-        close_button.pack(fill=tk.X)
+        close_button = self._stack_button(
+            body,
+            12,
+            self.tr("close_options"),
+            window.destroy,
+            label_key="close_options",
+            pady=(0, 0),
+        )
 
         def on_close() -> None:
             self.options_window = None
@@ -3277,7 +3566,9 @@ class WaybillSorterApp(tk.Tk):
         )
         status.pack(fill=tk.X, pady=(8, 10))
 
-        check_button = self._primary_button(body, self.tr("settings_check_now"), lambda: None)
+        check_button = self._primary_button(
+            body, self.tr("settings_check_now"), lambda: None, label_key="settings_check_now"
+        )
         check_button.configure(command=lambda: start_check())
         check_button.pack(fill=tk.X)
 
@@ -3286,8 +3577,15 @@ class WaybillSorterApp(tk.Tk):
             font=("Segoe UI", 9), anchor="w", justify="left", wraplength=430,
         ).pack(fill=tk.X, pady=(10, 16))
 
-        close_button = self._secondary_button(body, self.tr("settings_close"), window.destroy)
-        close_button.pack(fill=tk.X)
+        close_button = self._stack_button(
+            body,
+            13,
+            self.tr("settings_close"),
+            window.destroy,
+            label_key="settings_close",
+            primary=False,
+            pady=(0, 0),
+        )
 
         def start_check() -> None:
             if self.update_check_running:
@@ -3449,7 +3747,9 @@ class WaybillSorterApp(tk.Tk):
                     parent=window,
                 )
 
-        self._primary_button(buttons, self.tr("update_download"), open_download).pack(side=tk.RIGHT)
+        self._primary_button(
+            buttons, self.tr("update_download"), open_download, label_key="update_download"
+        ).pack(side=tk.RIGHT)
         self._secondary_button(buttons, self.tr("update_later"), window.destroy).pack(
             side=tk.RIGHT, padx=(0, 8)
         )
@@ -3934,7 +4234,9 @@ class WaybillSorterApp(tk.Tk):
                 return
             window.destroy()
 
-        self._secondary_button(buttons, self.tr("cancel"), window.destroy).pack(side=tk.RIGHT, padx=(8, 0))
+        self._secondary_button(
+            buttons, self.tr("cancel"), window.destroy, label_key="cancel"
+        ).pack(side=tk.RIGHT, padx=(8, 0))
         self._primary_button(buttons, self.tr("apply"), apply_manual_columns, compact=True).pack(side=tk.RIGHT)
 
         window.update_idletasks()

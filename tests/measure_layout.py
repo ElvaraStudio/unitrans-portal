@@ -47,12 +47,27 @@ def collect(app: WaybillSorterApp) -> dict[str, tuple[int, int, int, int]]:
             except tk.TclError:
                 pass
     # Header buttons are local variables, so find them by walking the tree.
+    # Buttons are keyed by label so the same button can be compared across a
+    # language switch even though its text changes; the index disambiguates
+    # repeats such as the per-screen "Clear Log".
+    seen: dict[str, int] = {}
     for child in app.winfo_children():
-        for grandchild in child.winfo_children():
+        for grandchild in _all_widgets(child):
             if isinstance(grandchild, tk.Button):
-                text = str(grandchild.cget("text"))
-                snapshot[f"btn:{text}"] = geometry_of(grandchild)
+                try:
+                    role = str(grandchild.cget("bg"))  # primary vs secondary
+                    seen[role] = seen.get(role, 0) + 1
+                    snapshot[f"btn#{seen[role]}:{role}"] = geometry_of(grandchild)
+                except tk.TclError:
+                    pass
     return snapshot
+
+
+def _all_widgets(widget: tk.Misc):
+    """Every descendant of ``widget``, depth first."""
+    for child in widget.winfo_children():
+        yield child
+        yield from _all_widgets(child)
 
 
 def wait_until_settled(app: WaybillSorterApp, seconds: float = 1.5) -> None:
@@ -104,6 +119,20 @@ def main() -> int:
             print(f"  {key:32} width {dw:+d}px")
     else:
         print("No measured element changes size.")
+
+    # Buttons of the same kind must be the same width as each other, otherwise
+    # they look ragged and the column is sized by whichever label is longest.
+    print()
+    by_role: dict[str, set[int]] = {}
+    for key, geometry in english.items():
+        if key.startswith("btn#"):
+            by_role.setdefault(key.split(":", 1)[1], set()).add(geometry[0])
+    for role, widths in sorted(by_role.items()):
+        label = "primary (#0B5CAD)" if role.lower() == "#0b5cad" else f"secondary ({role})"
+        if len(widths) == 1:
+            print(f"  uniform: all {label} buttons are {widths.pop()}px wide")
+        else:
+            print(f"  RAGGED : {label} buttons differ: {sorted(widths)}")
 
     # The window itself is the thing the user notices most.
     print()

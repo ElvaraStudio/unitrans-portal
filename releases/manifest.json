@@ -1,38 +1,32 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.2.1",
-  "display_version": "0.2.1 (Beta)",
+  "version": "0.2.2",
+  "display_version": "0.2.2 (Beta)",
   "published": "2026-10-10",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.1/Unitrans-Portal-0.2.1.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.1",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.2/Unitrans-Portal-0.2.2.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.2",
   "file": {
-    "name": "Unitrans-Portal-0.2.1.exe",
-    "size": 24435076,
-    "sha256": "58ab614d672792ffbe8ac1228438a0e2aaf1cd4f93b7675dc67c9081374ba5aa"
+    "name": "Unitrans-Portal-0.2.2.exe",
+    "size": 24445435,
+    "sha256": "9782cff74f0526d0b1a6f6ccf256873e702026c549e62905aaa7cee0f4e261d3"
   },
   "notes": {
     "en": {
-      "headline": "Interface fixes",
+      "headline": "Equal-sized buttons",
       "notes": [
-        "Switching between English and Chinese no longer resizes the window or moves it to another screen.",
-        "A stray blue box that could appear around a button after clicking has been removed.",
-        "There is now a Back to Main Menu button at the top-left of every section, so you can always get back to the start.",
-        "Settings now has a Display section where you can choose which monitor the app opens on. The choice is remembered and applies the next time you open the app.",
-        "The app no longer extends past the edge of the screen when it opens.",
-        "Update checking from the Settings window works as before."
+        "The buttons on the main screen are now all the same size. Previously each one was sized to fit its own wording, so they looked uneven.",
+        "Switching between English and Chinese no longer changes the size of any button, and no longer shifts the layout.",
+        "This applies to the three main buttons, the buttons down the side of each screen, the Excel Columns button, and the Choose File/Folder buttons."
       ]
     },
     "zh": {
-      "headline": "界面修正",
+      "headline": "按钮尺寸统一",
       "notes": [
-        "在中英文之间切换时，窗口不再改变大小，也不会跳到另一个屏幕。",
-        "修复了点击后按钮周围偶尔出现的蓝色方框。",
-        "每个功能页面的左上角新增“返回主菜单”按钮，随时可以回到起始界面。",
-        "“设置”中新增“显示器”部分，可选择软件在哪个屏幕上打开。该选择会被记住，并在下次打开软件时生效。",
-        "软件打开时不再超出屏幕边缘。",
-        "“设置”窗口中的检查更新功能保持不变。"
+        "主界面的按钮现在大小一致。此前每个按钮会按自身文字调整宽度，因此看起来参差不齐。",
+        "在中英文之间切换时，按钮尺寸不再改变，界面布局也不会移位。",
+        "此修正适用于三个主按钮、各页面侧边的按钮、“Excel 列设置”按钮，以及“选择文件/文件夹”按钮。"
       ]
     }
   }
