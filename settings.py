@@ -36,6 +36,8 @@ DEFAULTS: dict[str, Any] = {
     # Which display to open on: 0 = primary, 1 = second monitor. Tk can only
     # address the primary display, so this is honoured through monitors.py.
     "startup_monitor": 1,
+    # Colour scheme: "light" or "dark". Read by theme.py.
+    "theme": "light",
 }
 
 

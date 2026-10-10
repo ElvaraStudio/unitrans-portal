@@ -1,32 +1,34 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.2.3",
-  "display_version": "0.2.3 (Beta)",
+  "version": "0.3.0",
+  "display_version": "0.3.0 (Beta)",
   "published": "2026-10-10",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.3/Unitrans-Portal-0.2.3.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.3",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.3.0/Unitrans-Portal-0.3.0.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.3.0",
   "file": {
-    "name": "Unitrans-Portal-0.2.3.exe",
-    "size": 24446495,
-    "sha256": "7f7bef42e935ccaf3dd6de639f3e70078a0fb00244908be6205154bab64c07f6"
+    "name": "Unitrans-Portal-0.3.0.exe",
+    "size": 24455750,
+    "sha256": "4006daf49c133cc23608248ba6040ebe3951187ea3acd09f82a07262b537db2a"
   },
   "notes": {
     "en": {
-      "headline": "Header spacing",
+      "headline": "Dark mode",
       "notes": [
-        "The Back to Main Menu button now has proper space between it and the section title. They were pressed right up against each other.",
-        "The UniTrans logo is no longer shown inside the sections - only on the main menu - which gives the heading and the back button room to breathe.",
-        "The Excel Columns button is now exactly the same width as the Choose Excel button above it, so the card lines up properly."
+        "New dark mode. Use the button in the top-right corner of the window to switch between light and dark, or choose it in Settings under Appearance.",
+        "Your choice is remembered, so the app opens in the scheme you last used.",
+        "Every part of the interface is themed, including the scrollbars and the dividers.",
+        "The text colours were checked against a readability standard in both modes, and the footer version text - which was slightly too faint to read comfortably - is now darker."
       ]
     },
     "zh": {
-      "headline": "标题区域间距",
+      "headline": "深色模式",
       "notes": [
-        "“返回主菜单”按钮与页面标题之间现在有合适的间距。此前两者过于贴近。",
-        "各功能页面不再显示 UniTrans 标志（仅在主菜单显示），使标题与返回按钮都有更充裕的空间。",
-        "“Excel 列设置”按钮现在与上方的“选择 Excel”按钮宽度完全一致，卡片对齐更整齐。"
+        "新增深色模式。使用窗口右上角的按钮即可在浅色与深色之间切换，也可在“设置”的“外观”中选择。",
+        "您的选择会被记住，下次打开软件时使用上次选择的模式。",
+        "界面各部分均已完成配色适配，包括滚动条与分隔线。",
+        "两种模式下的文字颜色都经过可读性标准检查；页脚的版本文本此前略显过淡，现已加深。"
       ]
     }
   }

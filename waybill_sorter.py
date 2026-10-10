@@ -45,6 +45,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import settings as app_settings
+import theme
 from monitors import (
     MONITOR_DEFAULT,
     Monitor,
@@ -52,8 +53,102 @@ from monitors import (
     list_monitors,
     placement_for,
 )
+from theme import DARK, LIGHT
 from updater import check_for_update, format_size
 from version import APP_VERSION, display_version, version_label
+
+
+# ---------------------------------------------------------------------------
+# Colour tokens. Read from theme.py at startup and refreshed whenever the user
+# switches between light and dark, so no widget needs to know which scheme is
+# in use. Reassigning these and rebuilding the window is the whole of a theme
+# change - see apply_theme() and WaybillSorterApp.toggle_theme().
+# ---------------------------------------------------------------------------
+def _load_colour_tokens() -> dict[str, str]:
+    """Current value of every colour token, keyed by its constant name."""
+    return {
+        "BG_WINDOW": theme.colour("window"),
+        "BG_PANEL": theme.colour("surface_alt"),
+        "BG_LIST": theme.colour("list_bg"),
+        "BG_WARNING": theme.colour("danger_bg"),
+        "SURFACE": theme.colour("surface"),
+        "ON_ACCENT": theme.colour("on_accent"),
+        # The brand mark is fixed navy artwork, so it always sits on a light
+        # plate rather than following the scheme.
+        "LIGHT_LOGO_PLATE": "#F4F6F9",
+        "ACCENT": theme.colour("accent"),
+        "ACCENT_HOVER": theme.colour("accent_hover"),
+        "ACCENT_DISABLED": theme.colour("accent_disabled"),
+        "ACCENT_SOFT": theme.colour("accent_soft"),
+        "ACCENT_SOFT_HOVER": theme.colour("accent_soft_hover"),
+        "ACCENT_TEXT": theme.colour("accent_text"),
+        "TEXT": theme.colour("text"),
+        "TEXT_STRONG": theme.colour("text_strong"),
+        "TEXT_HEADING": theme.colour("text_heading"),
+        "TEXT_MUTED": theme.colour("text_muted"),
+        "TEXT_FAINT": theme.colour("text_faint"),
+        "TEXT_LABEL": theme.colour("text_label"),
+        "TEXT_ENTRY": theme.colour("text_entry"),
+        "BORDER": theme.colour("border"),
+        "DIVIDER": theme.colour("divider"),
+        "BORDER_WARNING": theme.colour("warning_border"),
+        "SCROLLBAR": theme.colour("scrollbar"),
+        "SCROLLBAR_TROUGH": theme.colour("scrollbar_trough"),
+        "STATE_SUCCESS": theme.colour("success"),
+        "STATE_ERROR": theme.colour("error"),
+        "STATE_WARNING": theme.colour("warning"),
+    }
+
+
+(
+    BG_WINDOW, BG_PANEL, BG_LIST, BG_WARNING, SURFACE, ON_ACCENT,
+    LIGHT_LOGO_PLATE,
+    ACCENT, ACCENT_HOVER, ACCENT_DISABLED, ACCENT_SOFT, ACCENT_SOFT_HOVER,
+    ACCENT_TEXT, TEXT, TEXT_STRONG, TEXT_HEADING, TEXT_MUTED, TEXT_FAINT,
+    TEXT_LABEL, TEXT_ENTRY, BORDER, DIVIDER, BORDER_WARNING, SCROLLBAR,
+    SCROLLBAR_TROUGH, STATE_SUCCESS, STATE_ERROR, STATE_WARNING,
+) = _load_colour_tokens().values()
+
+
+def apply_theme(name: str) -> None:
+    """Switch the active colour scheme and refresh every token constant."""
+    global BG_WINDOW, BG_PANEL, BG_LIST, BG_WARNING, SURFACE, ON_ACCENT
+    global LIGHT_LOGO_PLATE
+    global ACCENT, ACCENT_HOVER, ACCENT_DISABLED, ACCENT_SOFT, ACCENT_SOFT_HOVER
+    global ACCENT_TEXT, TEXT, TEXT_STRONG, TEXT_HEADING, TEXT_MUTED, TEXT_FAINT
+    global TEXT_LABEL, TEXT_ENTRY, BORDER, DIVIDER, BORDER_WARNING
+    global SCROLLBAR, SCROLLBAR_TROUGH, STATE_SUCCESS, STATE_ERROR, STATE_WARNING
+
+    theme.set_active(name)
+    tokens = _load_colour_tokens()
+    BG_WINDOW = tokens["BG_WINDOW"]
+    BG_PANEL = tokens["BG_PANEL"]
+    BG_LIST = tokens["BG_LIST"]
+    BG_WARNING = tokens["BG_WARNING"]
+    SURFACE = tokens["SURFACE"]
+    ON_ACCENT = tokens["ON_ACCENT"]
+    LIGHT_LOGO_PLATE = tokens["LIGHT_LOGO_PLATE"]
+    ACCENT = tokens["ACCENT"]
+    ACCENT_HOVER = tokens["ACCENT_HOVER"]
+    ACCENT_DISABLED = tokens["ACCENT_DISABLED"]
+    ACCENT_SOFT = tokens["ACCENT_SOFT"]
+    ACCENT_SOFT_HOVER = tokens["ACCENT_SOFT_HOVER"]
+    ACCENT_TEXT = tokens["ACCENT_TEXT"]
+    TEXT = tokens["TEXT"]
+    TEXT_STRONG = tokens["TEXT_STRONG"]
+    TEXT_HEADING = tokens["TEXT_HEADING"]
+    TEXT_MUTED = tokens["TEXT_MUTED"]
+    TEXT_FAINT = tokens["TEXT_FAINT"]
+    TEXT_LABEL = tokens["TEXT_LABEL"]
+    TEXT_ENTRY = tokens["TEXT_ENTRY"]
+    BORDER = tokens["BORDER"]
+    DIVIDER = tokens["DIVIDER"]
+    BORDER_WARNING = tokens["BORDER_WARNING"]
+    SCROLLBAR = tokens["SCROLLBAR"]
+    SCROLLBAR_TROUGH = tokens["SCROLLBAR_TROUGH"]
+    STATE_SUCCESS = tokens["STATE_SUCCESS"]
+    STATE_ERROR = tokens["STATE_ERROR"]
+    STATE_WARNING = tokens["STATE_WARNING"]
 
 
 SEQ_HEADER = "\u5e8f\u53f7"
@@ -2232,6 +2327,11 @@ I18N = {
         "settings_last_checked": "Last checked: {when}",
         "settings_never_checked": "Never checked",
         "settings_close": "Close",
+        "settings_appearance": "Appearance",
+        "settings_theme_light": "Light",
+        "settings_theme_dark": "Dark",
+        "theme_to_dark": "Dark mode",
+        "theme_to_light": "Light mode",
         "settings_display": "Display",
         "settings_monitor_hint": "Choose which screen the app opens on. Windows cannot do this for us, so the choice is applied when the app starts.",
         "settings_monitor_primary": "Primary screen",
@@ -2379,6 +2479,11 @@ I18N = {
         "settings_last_checked": "上次检查：{when}",
         "settings_never_checked": "从未检查",
         "settings_close": "关闭",
+        "settings_appearance": "外观",
+        "settings_theme_light": "浅色",
+        "settings_theme_dark": "深色",
+        "theme_to_dark": "深色模式",
+        "theme_to_light": "浅色模式",
         "settings_display": "显示器",
         "settings_monitor_hint": "选择软件在哪个屏幕上打开。Windows 无法自动完成此设置，因此在软件启动时应用。",
         "settings_monitor_primary": "主屏幕",
@@ -2452,7 +2557,7 @@ class WaybillSorterApp(tk.Tk):
         self.title(self.tr("window_title"))
         self.geometry("1180x760")
         self.minsize(1040, 660)
-        self.configure(bg="#E8EDF4")
+        self.configure(bg=BG_WINDOW)
 
         self.excel_path = tk.StringVar()
         self.excel_column_override: tuple[int, int, int] | None = None
@@ -2486,6 +2591,13 @@ class WaybillSorterApp(tk.Tk):
         self.settings_window: tk.Toplevel | None = None
         # Loaded once at startup; written back when the user changes something.
         self.user_settings: dict[str, object] = app_settings.load_settings()
+
+        # Establish the colour scheme before any widget is created, so the first
+        # window is drawn in the saved scheme rather than flashing light and
+        # then switching.
+        apply_theme(str(self.user_settings.get("theme") or LIGHT))
+        self.configure(bg=BG_WINDOW)
+
         # Owns the update-check thread. Kept so a close during a check does not
         # leave a callback pointing at a destroyed window.
         self.update_check_token = 0
@@ -2501,17 +2613,17 @@ class WaybillSorterApp(tk.Tk):
         return text.format(**kwargs) if kwargs else text
 
     def _card(self, parent: tk.Widget, title: str) -> tuple[tk.Frame, tk.Frame]:
-        shell = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#D5DCE7", highlightthickness=1)
+        shell = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER, highlightthickness=1)
         title_label = tk.Label(
             shell,
             text=title,
-            bg="#FFFFFF",
-            fg="#12355F",
+            bg=SURFACE,
+            fg=TEXT_HEADING,
             font=("Segoe UI", 13, "bold"),
             anchor="w",
         )
         title_label.pack(fill=tk.X, padx=16, pady=(12, 2))
-        body = tk.Frame(shell, bg="#FFFFFF")
+        body = tk.Frame(shell, bg=SURFACE)
         body.pack(fill=tk.BOTH, expand=True, padx=16, pady=(8, 14))
         return shell, body
 
@@ -2528,11 +2640,11 @@ class WaybillSorterApp(tk.Tk):
             parent,
             text=text,
             command=command,
-            bg="#0B5CAD",
-            activebackground="#084A8C",
-            fg="#FFFFFF",
-            activeforeground="#FFFFFF",
-            disabledforeground="#FFFFFF",
+            bg=ACCENT,
+            activebackground=ACCENT_HOVER,
+            fg=ON_ACCENT,
+            activeforeground=ON_ACCENT,
+            disabledforeground=ON_ACCENT,
             relief=tk.FLAT,
             bd=0,
             # highlightthickness is a Tk default of 1-2px and draws the focus
@@ -2555,11 +2667,11 @@ class WaybillSorterApp(tk.Tk):
     def _set_primary_button_enabled(self, button: tk.Button, enabled: bool) -> None:
         button.configure(
             state=tk.NORMAL if enabled else tk.DISABLED,
-            bg="#0B5CAD" if enabled else "#6F9FCE",
-            activebackground="#084A8C" if enabled else "#6F9FCE",
-            fg="#FFFFFF",
-            activeforeground="#FFFFFF",
-            disabledforeground="#FFFFFF",
+            bg=ACCENT if enabled else "#6F9FCE",
+            activebackground=ACCENT_HOVER if enabled else "#6F9FCE",
+            fg=ON_ACCENT,
+            activeforeground=ON_ACCENT,
+            disabledforeground=ON_ACCENT,
             cursor="hand2" if enabled else "arrow",
         )
 
@@ -2676,6 +2788,30 @@ class WaybillSorterApp(tk.Tk):
         button.grid(row=row, column=0, sticky="ew", pady=pady)
         return button
 
+    def _dialog_button(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None],
+        label_key: str | None = None,
+        primary: bool = True,
+    ) -> tk.Button:
+        """A full-width button in a dialog.
+
+        Dialogs lay their contents out with ``pack``, and Tk refuses to mix
+        ``pack`` and ``grid`` in one container: using the grid-based
+        ``_stack_button`` here raises "cannot use geometry manager grid inside
+        ... which already has slaves managed by pack". This is the pack
+        equivalent.
+        """
+        button = (
+            self._primary_button(parent, text, command, label_key=label_key)
+            if primary
+            else self._secondary_button(parent, text, command, label_key=label_key)
+        )
+        button.pack(fill=tk.X)
+        return button
+
     def _secondary_button(
         self,
         parent: tk.Widget,
@@ -2688,10 +2824,10 @@ class WaybillSorterApp(tk.Tk):
             parent,
             text=text,
             command=command,
-            bg="#EAF1F8",
-            activebackground="#DDE8F3",
-            fg="#12355F",
-            activeforeground="#12355F",
+            bg=ACCENT_SOFT,
+            activebackground=ACCENT_SOFT_HOVER,
+            fg=TEXT_HEADING,
+            activeforeground=TEXT_HEADING,
             relief=tk.FLAT,
             bd=0,
             # See _primary_button: without these a focus ring appears as a blue
@@ -2718,10 +2854,10 @@ class WaybillSorterApp(tk.Tk):
             parent,
             text=f"\u2190  {self.tr('back_to_workflows')}",
             command=self.return_to_workflows,
-            bg="#0B5CAD",
-            activebackground="#084A8C",
-            fg="#FFFFFF",
-            activeforeground="#FFFFFF",
+            bg=ACCENT,
+            activebackground=ACCENT_HOVER,
+            fg=ON_ACCENT,
+            activeforeground=ON_ACCENT,
             relief=tk.FLAT,
             bd=0,
             highlightthickness=0,
@@ -2773,8 +2909,8 @@ class WaybillSorterApp(tk.Tk):
             parent,
             textvariable=variable,
             state="readonly",
-            readonlybackground="#F6F8FB",
-            fg="#111827",
+            readonlybackground=BG_LIST,
+            fg=TEXT_ENTRY,
             relief=tk.FLAT,
             font=("Segoe UI", 11),
         )
@@ -2782,13 +2918,13 @@ class WaybillSorterApp(tk.Tk):
         parent.columnconfigure(1, weight=1)
 
     def _stat(self, parent: tk.Widget, row: int, label: str, variable: tk.StringVar) -> None:
-        tk.Label(parent, text=label, bg="#FFFFFF", fg="#627084", font=("Segoe UI", 10)).grid(
+        tk.Label(parent, text=label, bg=SURFACE, fg=TEXT_LABEL, font=("Segoe UI", 10)).grid(
             row=row,
             column=0,
             sticky="w",
             pady=(8, 0),
         )
-        tk.Label(parent, textvariable=variable, bg="#FFFFFF", fg="#0F172A", font=("Segoe UI", 11, "bold"), wraplength=440, justify="left").grid(
+        tk.Label(parent, textvariable=variable, bg=SURFACE, fg=TEXT, font=("Segoe UI", 11, "bold"), wraplength=440, justify="left").grid(
             row=row,
             column=1,
             sticky="w",
@@ -2801,12 +2937,37 @@ class WaybillSorterApp(tk.Tk):
             child.destroy()
 
     def _configure_base_style(self) -> None:
+        """Theme the ttk widgets, which ignore Tk's colour options.
+
+        ``ttk.Scrollbar`` and ``ttk.Separator`` are drawn by the ttk theme
+        engine, not by Tk's own colour options, so assigning ``bg``/``fg`` to
+        them does nothing. They have to be configured through a style - and
+        left alone they stay light grey in dark mode, which is exactly the kind
+        of detail that makes a dark theme look unfinished.
+        """
         style = ttk.Style(self)
         try:
+            # "clam" is the only built-in theme that honours these settings
+            # across platforms; the Windows native theme ignores them.
             style.theme_use("clam")
         except tk.TclError:
             pass
+
         style.configure("TSpinbox", arrowsize=14)
+        style.configure("TSeparator", background=DIVIDER)
+        style.configure(
+            "TScrollbar",
+            background=SCROLLBAR,
+            troughcolor=SCROLLBAR_TROUGH,
+            bordercolor=SCROLLBAR_TROUGH,
+            arrowcolor=TEXT_MUTED,
+            lightcolor=SCROLLBAR,
+            darkcolor=SCROLLBAR,
+        )
+        style.map(
+            "TScrollbar",
+            background=[("active", ACCENT_SOFT_HOVER), ("pressed", ACCENT_HOVER)],
+        )
 
     def _build_header(self, root: tk.Widget, title: str, subtitle: str, back: bool = False) -> None:
         """Header strip: optionally a back button, then the title, then actions.
@@ -2818,7 +2979,7 @@ class WaybillSorterApp(tk.Tk):
         breathe, and puts the back button at the very left edge where it is
         easiest to find. The logo still heads the workflow selector.
         """
-        hero = tk.Frame(root, bg="#FFFFFF")
+        hero = tk.Frame(root, bg=SURFACE)
         hero.pack(fill=tk.X)
         hero.columnconfigure(1, weight=1)
 
@@ -2830,17 +2991,25 @@ class WaybillSorterApp(tk.Tk):
             title_column = 1
         else:
             logo_image = self.load_logo_image()
-            brand = tk.Label(hero, bg="#FFFFFF", padx=12, pady=6)
+            # The logo is navy artwork with a transparent background, and its
+            # strapline is dark blue. Dropped straight onto a dark surface the
+            # strapline all but disappears, so in dark mode the mark keeps a
+            # light plate behind it and stays legible as supplied.
+            logo_bg = LIGHT_LOGO_PLATE if theme.active() == DARK else SURFACE
+            brand = tk.Label(hero, bg=logo_bg, padx=12, pady=6)
             if logo_image is not None:
                 brand.configure(image=logo_image)
             else:
                 brand.configure(
-                    text=self.tr("brand"), fg="#082B52", font=("Segoe UI", 24, "bold")
+                    text=self.tr("brand"),
+                    bg=logo_bg,
+                    fg=TEXT_STRONG,
+                    font=("Segoe UI", 24, "bold"),
                 )
             brand.grid(row=0, column=0, sticky="w", padx=(18, 0), pady=10)
             title_column = 1
 
-        title_frame = tk.Frame(hero, bg="#FFFFFF")
+        title_frame = tk.Frame(hero, bg=SURFACE)
         title_frame.grid(
             row=0,
             column=title_column,
@@ -2853,40 +3022,69 @@ class WaybillSorterApp(tk.Tk):
         tk.Label(
             title_frame,
             text=title,
-            bg="#FFFFFF",
-            fg="#082B52",
+            bg=SURFACE,
+            fg=TEXT_STRONG,
             font=("Segoe UI", 21, "bold"),
             anchor="w",
         ).pack(fill=tk.X)
         tk.Label(
             title_frame,
             text=subtitle,
-            bg="#FFFFFF",
-            fg="#4B5F7A",
+            bg=SURFACE,
+            fg=TEXT_MUTED,
             font=("Segoe UI", 11),
             anchor="w",
         ).pack(fill=tk.X, pady=(2, 0))
         self._secondary_button(hero, self.tr("settings"), self.open_settings).grid(
             row=0,
-            column=3,
+            column=4,
             sticky="e",
             padx=(0, 18),
         )
+        self._theme_button(hero).grid(row=0, column=3, sticky="e", padx=(0, 14))
         self._secondary_button(hero, self.tr("language"), self.toggle_language).grid(
             row=0,
             column=2,
             sticky="e",
-            padx=14,
+            padx=(0, 14),
+        )
+
+    def _theme_button(self, parent: tk.Widget) -> tk.Button:
+        """Toggle between the light and dark schemes.
+
+        Labelled with the scheme the button switches *to*, which is what a user
+        expects from a toggle, and shows a sun or a moon so the current state is
+        legible at a glance without reading the label.
+        """
+        dark_now = theme.active() == DARK
+        label = self.tr("theme_to_light") if dark_now else self.tr("theme_to_dark")
+        icon = "\u2600" if dark_now else "\u263d"  # sun when dark, moon when light
+        return tk.Button(
+            parent,
+            text=f"{icon}  {label}",
+            command=self.toggle_theme,
+            bg=ACCENT_SOFT,
+            activebackground=ACCENT_SOFT_HOVER,
+            fg=TEXT_HEADING,
+            activeforeground=TEXT_HEADING,
+            relief=tk.FLAT,
+            bd=0,
+            highlightthickness=0,
+            takefocus=0,
+            padx=17,
+            pady=9,
+            font=("Segoe UI", 11, "bold"),
+            cursor="hand2",
         )
 
     def _build_footer(self, root: tk.Widget) -> None:
-        footer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=0)
+        footer = tk.Frame(root, bg=BG_WINDOW, padx=16, pady=0)
         footer.pack(fill=tk.X)
         tk.Label(
             footer,
             text=version_label(),
-            bg="#E8EDF4",
-            fg="#6B7280",
+            bg=BG_WINDOW,
+            fg=TEXT_FAINT,
             font=("Segoe UI", 9),
             anchor="e",
         ).pack(fill=tk.X, pady=4)
@@ -2901,8 +3099,8 @@ class WaybillSorterApp(tk.Tk):
             height=14,
             wrap=tk.WORD,
             font=("Consolas", 12),
-            bg="#F8FAFC",
-            fg="#0F172A",
+            bg=BG_PANEL,
+            fg=TEXT,
             relief=tk.FLAT,
             padx=12,
             pady=12,
@@ -2922,7 +3120,7 @@ class WaybillSorterApp(tk.Tk):
         command: Callable[[], None],
         button_key: str | None = None,
     ) -> None:
-        shell = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#D5DCE7", highlightthickness=1)
+        shell = tk.Frame(parent, bg=SURFACE, highlightbackground=BORDER, highlightthickness=1)
         shell.grid(row=row, column=0, sticky="ew", pady=(0, 14))
         # The text column absorbs spare width; the button column keeps the
         # fixed button width, so the three cards line up and the layout does
@@ -2931,16 +3129,16 @@ class WaybillSorterApp(tk.Tk):
         tk.Label(
             shell,
             text=title,
-            bg="#FFFFFF",
-            fg="#12355F",
+            bg=SURFACE,
+            fg=TEXT_HEADING,
             font=("Segoe UI", 16, "bold"),
             anchor="w",
         ).grid(row=0, column=0, sticky="ew", padx=18, pady=(16, 4))
         tk.Label(
             shell,
             text=description,
-            bg="#FFFFFF",
-            fg="#4B5F7A",
+            bg=SURFACE,
+            fg=TEXT_MUTED,
             font=("Segoe UI", 11),
             anchor="w",
             justify="left",
@@ -2953,14 +3151,14 @@ class WaybillSorterApp(tk.Tk):
     def _build_workflow_selector(self) -> None:
         self.current_workflow = "selector"
         self._configure_base_style()
-        root = tk.Frame(self, bg="#E8EDF4")
+        root = tk.Frame(self, bg=BG_WINDOW)
         root.pack(fill=tk.BOTH, expand=True)
         self._build_header(root, self.tr("workflow_title"), self.tr("workflow_subtitle"))
 
-        body = tk.Frame(root, bg="#E8EDF4", padx=48, pady=38)
+        body = tk.Frame(root, bg=BG_WINDOW, padx=48, pady=38)
         body.pack(fill=tk.BOTH, expand=True)
         body.columnconfigure(0, weight=1)
-        choices = tk.Frame(body, bg="#E8EDF4")
+        choices = tk.Frame(body, bg=BG_WINDOW)
         choices.grid(row=0, column=0, sticky="nsew")
         choices.columnconfigure(0, weight=1)
         self._workflow_choice(
@@ -3019,11 +3217,11 @@ class WaybillSorterApp(tk.Tk):
         self.current_workflow = "unlock"
         self._configure_base_style()
 
-        root = tk.Frame(self, bg="#E8EDF4")
+        root = tk.Frame(self, bg=BG_WINDOW)
         root.pack(fill=tk.BOTH, expand=True)
         self._build_header(root, self.tr("workflow_unlock"), self.tr("workflow_unlock_desc"), back=True)
 
-        outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
+        outer = tk.Frame(root, bg=BG_WINDOW, padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(1, weight=1)
@@ -3036,7 +3234,7 @@ class WaybillSorterApp(tk.Tk):
         )
         self._stat(folder_body, 1, self.tr("pdf_files"), self.unlock_pdf_count)
 
-        lower = tk.Frame(outer, bg="#E8EDF4")
+        lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
         lower.columnconfigure(0, weight=0)
         lower.columnconfigure(1, weight=1)
@@ -3044,7 +3242,7 @@ class WaybillSorterApp(tk.Tk):
 
         actions_shell, actions_body = self._card(lower, self.tr("section_unlock_actions"))
         actions_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
-        action_stack = tk.Frame(actions_body, bg="#FFFFFF")
+        action_stack = tk.Frame(actions_body, bg=SURFACE)
         action_stack.grid(row=0, column=0, sticky="ew")
         self.unlock_button = self._stack_button(
             action_stack,
@@ -3078,16 +3276,16 @@ class WaybillSorterApp(tk.Tk):
         self.current_workflow = "driver"
         self._configure_base_style()
 
-        root = tk.Frame(self, bg="#E8EDF4")
+        root = tk.Frame(self, bg=BG_WINDOW)
         root.pack(fill=tk.BOTH, expand=True)
         self._build_header(root, self.tr("workflow_driver"), self.tr("workflow_driver_desc"), back=True)
 
-        outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
+        outer = tk.Frame(root, bg=BG_WINDOW, padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(1, weight=1)
 
-        top_grid = tk.Frame(outer, bg="#E8EDF4")
+        top_grid = tk.Frame(outer, bg=BG_WINDOW)
         top_grid.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         top_grid.columnconfigure(0, weight=1)
         top_grid.columnconfigure(1, weight=1)
@@ -3109,7 +3307,7 @@ class WaybillSorterApp(tk.Tk):
         )
         self._stat(image_body, 1, self.tr("driver_images"), self.driver_image_count)
 
-        lower = tk.Frame(outer, bg="#E8EDF4")
+        lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
         lower.columnconfigure(0, weight=0)
         lower.columnconfigure(1, weight=1)
@@ -3117,7 +3315,7 @@ class WaybillSorterApp(tk.Tk):
 
         actions_shell, actions_body = self._card(lower, self.tr("section_options"))
         actions_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
-        action_stack = tk.Frame(actions_body, bg="#FFFFFF")
+        action_stack = tk.Frame(actions_body, bg=SURFACE)
         action_stack.grid(row=0, column=0, sticky="ew")
         self.driver_fill_button = self._stack_button(
             action_stack,
@@ -3159,17 +3357,17 @@ class WaybillSorterApp(tk.Tk):
         self.current_workflow = "sort"
         self._configure_base_style()
 
-        root = tk.Frame(self, bg="#E8EDF4")
+        root = tk.Frame(self, bg=BG_WINDOW)
         root.pack(fill=tk.BOTH, expand=True)
 
         self._build_header(root, self.tr("hero_title"), self.tr("hero_subtitle"), back=True)
 
-        outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
+        outer = tk.Frame(root, bg=BG_WINDOW, padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(1, weight=1)
 
-        top_grid = tk.Frame(outer, bg="#E8EDF4")
+        top_grid = tk.Frame(outer, bg=BG_WINDOW)
         top_grid.grid(row=0, column=0, sticky="ew", pady=(0, 10))
         top_grid.columnconfigure(0, weight=1)
         top_grid.columnconfigure(1, weight=1)
@@ -3195,7 +3393,7 @@ class WaybillSorterApp(tk.Tk):
             label_key="excel_columns",
         )
         excel_columns_button.configure(width=0)
-        holder = tk.Frame(excel_body, bg="#FFFFFF")
+        holder = tk.Frame(excel_body, bg=SURFACE)
         holder.grid(row=3, column=0, sticky="w", pady=(14, 0))
         excel_columns_button.pack(in_=holder, fill=tk.X)
 
@@ -3235,7 +3433,7 @@ class WaybillSorterApp(tk.Tk):
         self._stat(pdf_body, 1, self.tr("pdf_files"), self.pdf_count)
         self._stat(pdf_body, 2, self.tr("pdf_page_check"), self.pdf_page_check)
 
-        lower = tk.Frame(outer, bg="#E8EDF4")
+        lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
         lower.columnconfigure(0, weight=0)
         lower.columnconfigure(1, weight=1)
@@ -3243,7 +3441,7 @@ class WaybillSorterApp(tk.Tk):
 
         options_shell, options_body = self._card(lower, self.tr("section_options"))
         options_shell.grid(row=0, column=0, sticky="nsw", padx=(0, 14))
-        action_stack = tk.Frame(options_body, bg="#FFFFFF")
+        action_stack = tk.Frame(options_body, bg=SURFACE)
         action_stack.grid(row=0, column=0, sticky="ew")
         self.sort_button = self._stack_button(
             action_stack,
@@ -3293,8 +3491,8 @@ class WaybillSorterApp(tk.Tk):
             height=14,
             wrap=tk.WORD,
             font=("Consolas", 12),
-            bg="#F8FAFC",
-            fg="#0F172A",
+            bg=BG_PANEL,
+            fg=TEXT,
             relief=tk.FLAT,
             padx=12,
             pady=12,
@@ -3306,13 +3504,13 @@ class WaybillSorterApp(tk.Tk):
         self.update_action_state()
         self.render_log_history()
 
-        footer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=0)
+        footer = tk.Frame(root, bg=BG_WINDOW, padx=16, pady=0)
         footer.pack(fill=tk.X)
         tk.Label(
             footer,
             text=version_label(),
-            bg="#E8EDF4",
-            fg="#6B7280",
+            bg=BG_WINDOW,
+            fg=TEXT_FAINT,
             font=("Segoe UI", 9),
             anchor="e",
         ).pack(fill=tk.X, pady=4)
@@ -3458,17 +3656,17 @@ class WaybillSorterApp(tk.Tk):
         window = tk.Toplevel(self)
         self.options_window = window
         window.title(self.tr("options_title"))
-        window.configure(bg="#FFFFFF")
+        window.configure(bg=SURFACE)
         window.resizable(False, False)
         window.transient(self)
 
-        body = tk.Frame(window, bg="#FFFFFF", padx=22, pady=20)
+        body = tk.Frame(window, bg=SURFACE, padx=22, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
         tk.Label(
             body,
             text=self.tr("options_note"),
-            bg="#FFFFFF",
-            fg="#4B5F7A",
+            bg=SURFACE,
+            fg=TEXT_MUTED,
             font=("Segoe UI", 11),
             justify="left",
             wraplength=440,
@@ -3477,31 +3675,29 @@ class WaybillSorterApp(tk.Tk):
             body,
             text=self.tr("separators"),
             variable=self.include_separators,
-            bg="#FFFFFF",
-            activebackground="#FFFFFF",
-            fg="#12355F",
+            bg=SURFACE,
+            activebackground=SURFACE,
+            fg=TEXT_HEADING,
             font=("Segoe UI", 11),
             anchor="w",
-            selectcolor="#FFFFFF",
+            selectcolor=SURFACE,
         ).pack(fill=tk.X, pady=(0, 10))
         tk.Checkbutton(
             body,
             text=self.tr("mark_sequence"),
             variable=self.mark_sequence,
-            bg="#FFFFFF",
-            activebackground="#FFFFFF",
-            fg="#12355F",
+            bg=SURFACE,
+            activebackground=SURFACE,
+            fg=TEXT_HEADING,
             font=("Segoe UI", 11),
             anchor="w",
-            selectcolor="#FFFFFF",
+            selectcolor=SURFACE,
         ).pack(fill=tk.X, pady=(0, 18))
-        close_button = self._stack_button(
+        close_button = self._dialog_button(
             body,
-            12,
             self.tr("close_options"),
             window.destroy,
             label_key="close_options",
-            pady=(0, 0),
         )
 
         def on_close() -> None:
@@ -3529,38 +3725,66 @@ class WaybillSorterApp(tk.Tk):
         window = tk.Toplevel(self)
         self.settings_window = window
         window.title(self.tr("settings_title"))
-        window.configure(bg="#FFFFFF")
+        window.configure(bg=SURFACE)
         window.resizable(False, False)
         window.transient(self)
 
-        body = tk.Frame(window, bg="#FFFFFF", padx=24, pady=20)
+        body = tk.Frame(window, bg=SURFACE, padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
 
         tk.Label(
-            body, text=self.tr("settings_about"), bg="#FFFFFF", fg="#12355F",
+            body, text=self.tr("settings_about"), bg=SURFACE, fg=TEXT_HEADING,
             font=("Segoe UI", 12, "bold"), anchor="w",
         ).pack(fill=tk.X)
         tk.Label(
-            body, text=self.tr("settings_version"), bg="#FFFFFF", fg="#4B5F7A",
+            body, text=self.tr("settings_version"), bg=SURFACE, fg=TEXT_MUTED,
             font=("Segoe UI", 10), anchor="w",
         ).pack(fill=tk.X, pady=(8, 0))
         tk.Label(
-            body, text=version_label(), bg="#FFFFFF", fg="#082B52",
+            body, text=version_label(), bg=SURFACE, fg=TEXT_STRONG,
             font=("Segoe UI", 13, "bold"), anchor="w",
         ).pack(fill=tk.X)
 
         ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
 
+        # --- appearance ----------------------------------------------------
+        tk.Label(
+            body, text=self.tr("settings_appearance"), bg=SURFACE, fg=TEXT_HEADING,
+            font=("Segoe UI", 12, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+
+        scheme = theme.active()
+        scheme_var = tk.StringVar(value=scheme)
+        for value, label_key in ((LIGHT, "settings_theme_light"), (DARK, "settings_theme_dark")):
+            tk.Radiobutton(
+                body,
+                text=self.tr(label_key),
+                variable=scheme_var,
+                value=value,
+                command=lambda chosen=value: self.set_theme(chosen),
+                bg=SURFACE,
+                activebackground=SURFACE,
+                fg=TEXT_HEADING,
+                activeforeground=TEXT_HEADING,
+                selectcolor=SURFACE,
+                font=("Segoe UI", 10),
+                anchor="w",
+                highlightthickness=0,
+                takefocus=0,
+            ).pack(fill=tk.X, pady=(6 if value == LIGHT else 2, 0))
+
+        ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+
         # --- display -------------------------------------------------------
         tk.Label(
-            body, text=self.tr("settings_display"), bg="#FFFFFF", fg="#12355F",
+            body, text=self.tr("settings_display"), bg=SURFACE, fg=TEXT_HEADING,
             font=("Segoe UI", 12, "bold"), anchor="w",
         ).pack(fill=tk.X)
 
         monitors = list_monitors()
         if len(monitors) > 1:
             tk.Label(
-                body, text=self.tr("settings_monitor_hint"), bg="#FFFFFF", fg="#4B5F7A",
+                body, text=self.tr("settings_monitor_hint"), bg=SURFACE, fg=TEXT_MUTED,
                 font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
             ).pack(fill=tk.X, pady=(8, 6))
 
@@ -3575,33 +3799,33 @@ class WaybillSorterApp(tk.Tk):
                     variable=monitor_var,
                     value=monitor.index,
                     command=lambda: self._set_startup_monitor(monitor_var.get()),
-                    bg="#FFFFFF",
-                    activebackground="#FFFFFF",
-                    fg="#12355F",
+                    bg=SURFACE,
+                    activebackground=SURFACE,
+                    fg=TEXT_HEADING,
                     font=("Segoe UI", 10),
                     anchor="w",
-                    selectcolor="#FFFFFF",
+                    selectcolor=SURFACE,
                     highlightthickness=0,
                 ).pack(fill=tk.X)
             tk.Label(
-                body, text=self.tr("settings_monitor_apply"), bg="#FFFFFF", fg="#6B7280",
+                body, text=self.tr("settings_monitor_apply"), bg=SURFACE, fg=TEXT_FAINT,
                 font=("Segoe UI", 9), anchor="w",
             ).pack(fill=tk.X, pady=(4, 0))
         else:
             tk.Label(
-                body, text=self.tr("settings_monitor_single"), bg="#FFFFFF", fg="#4B5F7A",
+                body, text=self.tr("settings_monitor_single"), bg=SURFACE, fg=TEXT_MUTED,
                 font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
             ).pack(fill=tk.X, pady=(8, 0))
 
         ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
 
         tk.Label(
-            body, text=self.tr("settings_updates"), bg="#FFFFFF", fg="#12355F",
+            body, text=self.tr("settings_updates"), bg=SURFACE, fg=TEXT_HEADING,
             font=("Segoe UI", 12, "bold"), anchor="w",
         ).pack(fill=tk.X)
 
         status = tk.Label(
-            body, text=self._last_checked_text(), bg="#FFFFFF", fg="#4B5F7A",
+            body, text=self._last_checked_text(), bg=SURFACE, fg=TEXT_MUTED,
             font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
         )
         status.pack(fill=tk.X, pady=(8, 10))
@@ -3613,18 +3837,16 @@ class WaybillSorterApp(tk.Tk):
         check_button.pack(fill=tk.X)
 
         tk.Label(
-            body, text=self.tr("settings_auto_note"), bg="#FFFFFF", fg="#6B7280",
+            body, text=self.tr("settings_auto_note"), bg=SURFACE, fg=TEXT_FAINT,
             font=("Segoe UI", 9), anchor="w", justify="left", wraplength=430,
         ).pack(fill=tk.X, pady=(10, 16))
 
-        close_button = self._stack_button(
+        close_button = self._dialog_button(
             body,
-            13,
             self.tr("settings_close"),
             window.destroy,
             label_key="settings_close",
             primary=False,
-            pady=(0, 0),
         )
 
         def start_check() -> None:
@@ -3632,7 +3854,7 @@ class WaybillSorterApp(tk.Tk):
                 return
             self.update_check_running = True
             self._set_primary_button_enabled(check_button, False)
-            status.configure(text=self.tr("settings_checking"), fg="#4B5F7A")
+            status.configure(text=self.tr("settings_checking"), fg=TEXT_MUTED)
 
             # Bumped whenever a new check starts; a result carrying a stale
             # token is discarded rather than written into a recycled window.
@@ -3672,6 +3894,18 @@ class WaybillSorterApp(tk.Tk):
         y = self.winfo_rooty() + max(40, (self.winfo_height() - window.winfo_height()) // 3)
         window.geometry(f"+{x}+{y}")
 
+    def set_theme(self, name: str) -> None:
+        """Apply a specific scheme, as chosen in Settings."""
+        if name == theme.active():
+            return
+        self.user_settings = app_settings.update_settings(theme=name)
+        apply_theme(name)
+        self.configure(bg=BG_WINDOW)
+        self._rebuild_current_screen()
+        # The Settings window is closed by the rebuild, so reopen it: the user
+        # is mid-task in that dialog and should not lose their place.
+        self.open_settings()
+
     def _set_startup_monitor(self, index: int) -> None:
         """Persist the chosen startup display."""
         self.user_settings = app_settings.update_settings(startup_monitor=int(index))
@@ -3692,7 +3926,7 @@ class WaybillSorterApp(tk.Tk):
         if not getattr(result, "ok", False):
             status.configure(
                 text=self.tr("settings_check_failed", error=getattr(result, "error", "")),
-                fg="#B3261E",
+                fg=STATE_ERROR,
             )
             return
 
@@ -3705,13 +3939,13 @@ class WaybillSorterApp(tk.Tk):
             remote = str(getattr(result, "remote_version", ""))
             status.configure(
                 text=self.tr("settings_update_available", version=remote),
-                fg="#0B5CAD",
+                fg=ACCENT_TEXT,
             )
             self.show_update_dialog(result)
         else:
             status.configure(
                 text=f"{self.tr('settings_up_to_date')}  ({self._last_checked_text()})",
-                fg="#1B7F3B",
+                fg=STATE_SUCCESS,
             )
 
     def show_update_dialog(self, result: object) -> None:
@@ -3724,30 +3958,30 @@ class WaybillSorterApp(tk.Tk):
         remote = str(getattr(result, "remote_version", ""))
         window = tk.Toplevel(self)
         window.title(self.tr("update_title"))
-        window.configure(bg="#FFFFFF")
+        window.configure(bg=SURFACE)
         window.transient(self)
 
-        body = tk.Frame(window, bg="#FFFFFF", padx=24, pady=20)
+        body = tk.Frame(window, bg=SURFACE, padx=24, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
 
         tk.Label(
-            body, text=self.tr("update_heading", version=remote), bg="#FFFFFF",
-            fg="#082B52", font=("Segoe UI", 15, "bold"), anchor="w",
+            body, text=self.tr("update_heading", version=remote), bg=SURFACE,
+            fg=TEXT_STRONG, font=("Segoe UI", 15, "bold"), anchor="w",
         ).pack(fill=tk.X)
         tk.Label(
-            body, text=self.tr("update_current", current=version_label()), bg="#FFFFFF",
-            fg="#4B5F7A", font=("Segoe UI", 10), anchor="w",
+            body, text=self.tr("update_current", current=version_label()), bg=SURFACE,
+            fg=TEXT_MUTED, font=("Segoe UI", 10), anchor="w",
         ).pack(fill=tk.X, pady=(4, 0))
 
         size_text = format_size(getattr(result, "size_bytes", None))
         if size_text:
             tk.Label(
-                body, text=self.tr("update_size", size=size_text), bg="#FFFFFF",
-                fg="#4B5F7A", font=("Segoe UI", 10), anchor="w",
+                body, text=self.tr("update_size", size=size_text), bg=SURFACE,
+                fg=TEXT_MUTED, font=("Segoe UI", 10), anchor="w",
             ).pack(fill=tk.X, pady=(2, 0))
 
         tk.Label(
-            body, text=self.tr("update_whats_new"), bg="#FFFFFF", fg="#12355F",
+            body, text=self.tr("update_whats_new"), bg=SURFACE, fg=TEXT_HEADING,
             font=("Segoe UI", 12, "bold"), anchor="w",
         ).pack(fill=tk.X, pady=(16, 6))
 
@@ -3756,12 +3990,12 @@ class WaybillSorterApp(tk.Tk):
         if not notes:
             notes = [self.tr("update_notes_missing")]
 
-        notes_frame = tk.Frame(body, bg="#FFFFFF")
+        notes_frame = tk.Frame(body, bg=SURFACE)
         notes_frame.pack(fill=tk.BOTH, expand=True)
         notes_text = tk.Text(
             notes_frame, height=9, wrap=tk.WORD, font=("Segoe UI", 10),
-            bg="#F8FAFC", fg="#0F172A", relief=tk.FLAT, padx=10, pady=10,
-            highlightbackground="#D5DCE7", highlightthickness=1,
+            bg=BG_PANEL, fg=TEXT, relief=tk.FLAT, padx=10, pady=10,
+            highlightbackground=BORDER, highlightthickness=1,
         )
         notes_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar = ttk.Scrollbar(notes_frame, orient=tk.VERTICAL, command=notes_text.yview)
@@ -3771,7 +4005,7 @@ class WaybillSorterApp(tk.Tk):
             notes_text.insert(tk.END, f"\u2022 {note}\n\n")
         notes_text.configure(state=tk.DISABLED)
 
-        buttons = tk.Frame(body, bg="#FFFFFF")
+        buttons = tk.Frame(body, bg=SURFACE)
         buttons.pack(fill=tk.X, pady=(16, 0))
 
         url = str(getattr(result, "release_page", "") or getattr(result, "download_url", ""))
@@ -3875,24 +4109,46 @@ class WaybillSorterApp(tk.Tk):
         self.language.set("zh" if self.language.get() == "en" else "en")
         self.title(self.tr("window_title"))
         self.status_text.set(self.tr(self.status_key))
-        if self.options_window is not None:
-            try:
-                if self.options_window.winfo_exists():
-                    self.options_window.destroy()
-            except tk.TclError:
-                pass
-            self.options_window = None
-        # The settings window is rebuilt in the new language by open_settings.
-        # Invalidate any in-flight check so its callback cannot write into the
-        # destroyed window.
+        self._rebuild_current_screen()
+
+    def toggle_theme(self) -> None:
+        """Switch between the light and dark colour schemes.
+
+        The setting is saved immediately so it survives a restart, and the
+        window is rebuilt in place - the colours are read from the token
+        constants when widgets are created, so recreating them is what applies
+        the new scheme. The window keeps its size and position, the same as a
+        language switch.
+        """
+        new_scheme = LIGHT if theme.active() == DARK else DARK
+        self.user_settings = app_settings.update_settings(theme=new_scheme)
+        apply_theme(new_scheme)
+        self.configure(bg=BG_WINDOW)
+        self.status_text.set(self.tr(self.status_key))
+        self._rebuild_current_screen()
+
+    def _rebuild_current_screen(self) -> None:
+        """Rebuild the current screen after a language or theme change.
+
+        Both kinds of change work the same way: colours and strings are read
+        from module-level state as widgets are created, so the window is torn
+        down and rebuilt. Two things must be handled explicitly.
+        """
+        # Open dialogs are rebuilt in the new language or colours when reopened,
+        # so close them rather than leaving stale ones behind. The update-check
+        # token is bumped so a result arriving for a destroyed window is
+        # discarded instead of being written into it.
+        for attribute in ("options_window", "settings_window"):
+            window = getattr(self, attribute, None)
+            if window is not None:
+                try:
+                    if window.winfo_exists():
+                        window.destroy()
+                except tk.TclError:
+                    pass
+                setattr(self, attribute, None)
         self.update_check_token += 1
-        if self.settings_window is not None:
-            try:
-                if self.settings_window.winfo_exists():
-                    self.settings_window.destroy()
-            except tk.TclError:
-                pass
-            self.settings_window = None
+
         workflow = self.current_workflow
 
         # Destroying every child makes Tk recompute the window's size from
@@ -4203,17 +4459,17 @@ class WaybillSorterApp(tk.Tk):
         header_row, sequence_column, container_column = self.default_excel_column_setup(path)
         window = tk.Toplevel(self)
         window.title(self.tr("excel_columns_title"))
-        window.configure(bg="#FFFFFF")
+        window.configure(bg=SURFACE)
         window.transient(self)
         window.grab_set()
 
-        body = tk.Frame(window, bg="#FFFFFF", padx=20, pady=18)
+        body = tk.Frame(window, bg=SURFACE, padx=20, pady=18)
         body.pack(fill=tk.BOTH, expand=True)
         tk.Label(
             body,
             text=self.tr("excel_columns_note"),
-            bg="#FFFFFF",
-            fg="#4B5F7A",
+            bg=SURFACE,
+            fg=TEXT_MUTED,
             font=("Segoe UI", 10),
             justify="left",
             wraplength=420,
@@ -4222,8 +4478,8 @@ class WaybillSorterApp(tk.Tk):
             tk.Label(
                 body,
                 text=initial_error,
-                bg="#FFF7ED",
-                fg="#9A3412",
+                bg=BG_WARNING,
+                fg=STATE_WARNING,
                 font=("Segoe UI", 9),
                 justify="left",
                 wraplength=420,
@@ -4242,7 +4498,7 @@ class WaybillSorterApp(tk.Tk):
         )
         start_row = 2
         for row_index, (label, variable) in enumerate(fields, start=start_row):
-            tk.Label(body, text=label, bg="#FFFFFF", fg="#12355F", font=("Segoe UI", 10, "bold")).grid(
+            tk.Label(body, text=label, bg=SURFACE, fg=TEXT_HEADING, font=("Segoe UI", 10, "bold")).grid(
                 row=row_index,
                 column=0,
                 sticky="w",
@@ -4257,7 +4513,7 @@ class WaybillSorterApp(tk.Tk):
             )
         body.columnconfigure(1, weight=1)
 
-        buttons = tk.Frame(body, bg="#FFFFFF")
+        buttons = tk.Frame(body, bg=SURFACE)
         buttons.grid(row=start_row + len(fields), column=0, columnspan=2, sticky="e", pady=(16, 0))
 
         def apply_manual_columns() -> None:

@@ -175,6 +175,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--language", choices=["en", "zh"], help="Switch language before capturing.")
     parser.add_argument(
+        "--theme",
+        choices=["light", "dark"],
+        help="Switch colour scheme before capturing.",
+    )
+    parser.add_argument(
         "--screen",
         choices=["selector", "sort", "driver", "unlock"],
         help="Open a specific screen before capturing.",
@@ -223,6 +228,15 @@ def main(argv: list[str] | None = None) -> int:
         app.update_idletasks()
         app.update()
         print(f"PASS: switched language to {args.language!r} (title now {app.title()!r}).")
+
+    if args.theme:
+        import theme as theme_module
+
+        if theme_module.active() != args.theme:
+            app.set_theme(args.theme)
+            app.update_idletasks()
+            app.update()
+        print(f"PASS: colour scheme is {theme_module.active()!r}, window bg {app.cget('bg')!r}.")
 
     if args.screen and args.screen != "selector":
         {

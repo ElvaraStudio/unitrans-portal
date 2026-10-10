@@ -24,6 +24,34 @@ behaviour can still change between versions.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
 
+## [0.3.0] - 2026-10-10
+
+### Added
+
+- **Dark mode.** A toggle in the header switches between light and dark, and
+  there is a matching **Appearance** section in Settings. The choice is saved
+  and applied at the next start.
+- `theme.py` — both colour schemes as named tokens, and `apply_theme()` to
+  switch between them. Colours were previously written as literals in 140
+  places; every one now comes from a token, which is what makes a second scheme
+  possible at all.
+- `tools/check_theme_contrast.py` computes the WCAG contrast ratio for every
+  foreground/background pair in both schemes. Dark mode is easy to get subtly
+  wrong — text that is *nearly* the background colour looks fine on the
+  monitor it was chosen on and is unreadable on someone else's — so the pairs
+  are measured rather than judged by eye. All 24 pairs pass in both schemes.
+
+### Fixed
+
+- The ttk scrollbar and separators are now themed. They are drawn by the ttk
+  theme engine and ignore Tk's own colour options, so they stayed light grey in
+  dark mode.
+- The footer version text was 4.11:1 against the page background, below the
+  4.5:1 needed for readable text. Darkened to pass.
+- The Options and Settings dialogs could not open at all: their close buttons
+  used the grid-based stack helper inside containers laid out with `pack`, and
+  Tk rejects mixing the two. A pack-based variant is used there instead.
+
 ## [0.2.3] - 2026-10-10
 
 ### Changed

@@ -3,6 +3,29 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.3.0",
+      "date": "2026-10-10",
+      "kind": "beta",
+      "en": {
+        "headline": "Dark mode",
+        "notes": [
+          "New dark mode. Use the button in the top-right corner of the window to switch between light and dark, or choose it in Settings under Appearance.",
+          "Your choice is remembered, so the app opens in the scheme you last used.",
+          "Every part of the interface is themed, including the scrollbars and the dividers.",
+          "The text colours were checked against a readability standard in both modes, and the footer version text - which was slightly too faint to read comfortably - is now darker."
+        ]
+      },
+      "zh": {
+        "headline": "深色模式",
+        "notes": [
+          "新增深色模式。使用窗口右上角的按钮即可在浅色与深色之间切换，也可在\u201c设置\u201d的\u201c外观\u201d中选择。",
+          "您的选择会被记住，下次打开软件时使用上次选择的模式。",
+          "界面各部分均已完成配色适配，包括滚动条与分隔线。",
+          "两种模式下的文字颜色都经过可读性标准检查；页脚的版本文本此前略显过淡，现已加深。"
+        ]
+      }
+    },
+    {
       "version": "0.2.3",
       "date": "2026-10-10",
       "kind": "beta",

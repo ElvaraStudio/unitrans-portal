@@ -76,16 +76,49 @@ def group_widths(buttons: list[tuple[str, int, int]], exclude: set[str]) -> list
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--theme",
+        choices=["light", "dark"],
+        default="light",
+        help="Which colour scheme to measure in.",
+    )
+    args = parser.parse_args()
+
     app = WaybillSorterApp()
     settle(app, 1.2)
+    if args.theme != "light":
+        app.set_theme(args.theme)
+        settle(app, 1.0)
+    print(f"colour scheme: {args.theme}\n")
 
     failures: list[str] = []
 
-    # Header buttons have genuinely different labels ("中文" vs "Settings"), so
-    # they are excluded from the uniformity check but still included in the
-    # stability check.
+    # Header buttons carry labels that are *meant* to differ between languages,
+    # so they are excluded from the uniformity check but still included in the
+    # stability check where the label does not change.
     header_labels = {app.tr("settings"), app.tr("language"), app.tr("back_to_workflows")}
     header_labels |= {f"\u2190  {app.tr('back_to_workflows')}"}
+    # The theme button's label names the scheme it switches to, which is a
+    # different word in each language ("Light mode" / "浅色模式"), so it changes
+    # width on a language switch by design.
+    header_labels |= {
+        f"\u2600  {app.tr('theme_to_light')}",
+        f"\u263d  {app.tr('theme_to_dark')}",
+    }
+    # Compare against the labels in *both* languages, since the switch swaps them.
+    from waybill_sorter import I18N
+
+    for table in I18N.values():
+        for key in ("settings", "language", "back_to_workflows", "theme_to_light", "theme_to_dark"):
+            text = str(table.get(key, ""))
+            if text:
+                header_labels.add(text)
+                header_labels.add(f"\u2190  {text}")
+                header_labels.add(f"\u2600  {text}")
+                header_labels.add(f"\u263d  {text}")
 
     print("=== uniformity: buttons in a group must share one width ===")
     # Two visual groups per screen: the tall action buttons, and the file
