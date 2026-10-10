@@ -74,12 +74,37 @@ PDFs that open with a blank password are rewritten without encryption. PDFs that
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.2.0 | 2026-10-10 | Settings window with a manual update check. |
 | 0.1.0 | 2026-10-10 | First beta release. Versioning restarted; app renamed to Unitrans Portal. |
 
 Full release notes are in [CHANGELOG.md](CHANGELOG.md).
 
-The app shows its own version in the footer, and Windows Explorer ▸ Properties ▸
-Details shows the file version of the installed executable.
+The app shows its own version in the footer and in the Settings window, and
+Windows Explorer ▸ Properties ▸ Details shows the file version of the installed
+executable.
+
+## Checking for updates
+
+Open **Settings** (top-right of the window) and choose **Check for updates now**.
+The app reads `releases/latest/download/manifest.json` from GitHub, compares the
+version, and either confirms you are current or lists what changed with a button
+to open the download page.
+
+**The app does not check for updates on its own.** There is no background or
+launch-time check in this version — you start it manually. The
+`auto_check_updates` setting is stored in `settings.json` so that enabling
+automatic checking later needs no migration, but the behaviour is not
+implemented yet.
+
+From a terminal, the same check is available without the GUI:
+
+```powershell
+.\releases\Unitrans-Portal-0.2.0.exe --check-updates
+```
+
+Exit codes: `0` up to date, `2` update available, `1` the check failed. Being
+offline or behind a blocked network is reported as a plain message, never a
+crash — the check cannot interrupt work in progress.
 
 ## Building a release
 
@@ -127,13 +152,14 @@ Releases are currently built with Python 3.14.6. The original 1.0 build used
 
 ## How updates will work
 
-> **Not implemented yet.** This describes the intended behaviour, so the
-> release layout below can be set up correctly ahead of it.
+> **Partly implemented.** The check is live (see "Checking for updates" above).
+> Downloading and installing a build from inside the app is not.
 
-The app checks `releases/latest/download/manifest.json` on GitHub. The manifest
+The app reads `releases/latest/download/manifest.json` on GitHub. The manifest
 is a small document naming the newest version, where to download it, its size,
-and its SHA-256. If a newer version exists, the app shows what changed and can
-download and install it in place.
+and its SHA-256. If a newer version exists, the app shows what changed and offers
+to open the download page. Replacing the installed executable from inside the app
+is the next step and needs a verified download plus a rollback path.
 
 > **Two constraints the updater depends on — do not break these:**
 >
@@ -144,38 +170,57 @@ download and install it in place.
 >    returns `404` to the app.
 > 2. **Releases must not be GitHub pre-releases.** GitHub excludes pre-releases
 >    from `/releases/latest`, so a beta published that way is invisible to the
->    updater. Beta status is carried by the version number (`0.1.0 (Beta)`) and
+>    updater. Beta status is carried by the version number (`0.2.0 (Beta)`) and
 >    the manifest's `beta` field, not by a GitHub release channel.
 >    `releasectl.py publish` therefore does not set `--prerelease` automatically;
 >    the flag exists but warns when used.
 
 Design decisions already made:
 
-- **Notify first, never mid-job.** The app reports an available update but does
-  not interrupt work in progress.
-- **Verified before running.** A downloaded build is only used if its SHA-256
-  matches the manifest, so a truncated or tampered download is refused.
-- **Reversible.** The update keeps a backup of the current executable and
-  restores it if the swap fails, so a failed update cannot leave the tool
+- **Notify only, never mid-job.** The app reports an available update and opens
+  the download page; it does not interrupt work in progress.
+- **Verified before running.** A future downloaded build will only be used if its
+  SHA-256 matches the manifest, so a truncated or tampered download is refused.
+- **Reversible.** The planned update will keep a backup of the current executable
+  and restore it if the swap fails, so a failed update cannot leave the tool
   unusable.
 - **Per-user install.** The intended installer places the app under
   `%LOCALAPPDATA%\Programs`, which needs no administrator rights — so updating
   needs none either.
 - **Patch notes are offline-capable.** The release notes for the running version
-  travel inside the executable in `changelog.json`, so the What's New dialog
+  travel inside the executable in `changelog.json`, so the What's New content
   works without a network connection.
 
 ## Repository layout
 
 | Path | Purpose |
 |---|---|
-| `waybill_sorter.py` | The application. |
+| `waybill_sorter.py` | The application and its interface. |
 | `version.py` | Version and product identity — the single source of truth. |
+| `updater.py` | Update checking: fetches and validates the release manifest. |
+| `settings.py` | Per-user settings in `%APPDATA%\UnitransPortal`. |
 | `make_assets.py` | Generates the app icon from the logo. |
 | `releasectl.py` | Generates the update manifest, publishes releases. |
 | `build.ps1` | Builds the executable. |
 | `CHANGELOG.md` | Human-readable release notes. |
 | `changelog.json` | Release notes as shown in the app (English and Chinese). |
+| `tests/` | Test suite, plus GUI and packaged-exe smoke tests. |
+| `tools/` | One-off maintenance scripts. |
 | `releases/` | Published artifacts and `manifest.json`. Binaries here are gitignored and live on the GitHub Release page. |
 | `assets/` | Generated icon. |
 | `pyinstaller_hooks/` | PyInstaller build hooks. |
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests
+```
+
+Covers version comparison, i18n key parity, update checking against a fake
+transport (offline, timeouts, 404s, malformed manifests), settings persistence,
+and source-health checks. The GUI and the packaged executable are verified by
+running them:
+
+```powershell
+.\.venv\Scripts\python.exe tests\smoke_gui.py --settings --screenshot settings.png
+```
