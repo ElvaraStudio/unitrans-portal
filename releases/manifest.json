@@ -1,32 +1,32 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.2.2",
-  "display_version": "0.2.2 (Beta)",
+  "version": "0.2.3",
+  "display_version": "0.2.3 (Beta)",
   "published": "2026-10-10",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.2/Unitrans-Portal-0.2.2.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.2",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.3/Unitrans-Portal-0.2.3.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.3",
   "file": {
-    "name": "Unitrans-Portal-0.2.2.exe",
-    "size": 24445435,
-    "sha256": "9782cff74f0526d0b1a6f6ccf256873e702026c549e62905aaa7cee0f4e261d3"
+    "name": "Unitrans-Portal-0.2.3.exe",
+    "size": 24446495,
+    "sha256": "7f7bef42e935ccaf3dd6de639f3e70078a0fb00244908be6205154bab64c07f6"
   },
   "notes": {
     "en": {
-      "headline": "Equal-sized buttons",
+      "headline": "Header spacing",
       "notes": [
-        "The buttons on the main screen are now all the same size. Previously each one was sized to fit its own wording, so they looked uneven.",
-        "Switching between English and Chinese no longer changes the size of any button, and no longer shifts the layout.",
-        "This applies to the three main buttons, the buttons down the side of each screen, the Excel Columns button, and the Choose File/Folder buttons."
+        "The Back to Main Menu button now has proper space between it and the section title. They were pressed right up against each other.",
+        "The UniTrans logo is no longer shown inside the sections - only on the main menu - which gives the heading and the back button room to breathe.",
+        "The Excel Columns button is now exactly the same width as the Choose Excel button above it, so the card lines up properly."
       ]
     },
     "zh": {
-      "headline": "按钮尺寸统一",
+      "headline": "标题区域间距",
       "notes": [
-        "主界面的按钮现在大小一致。此前每个按钮会按自身文字调整宽度，因此看起来参差不齐。",
-        "在中英文之间切换时，按钮尺寸不再改变，界面布局也不会移位。",
-        "此修正适用于三个主按钮、各页面侧边的按钮、“Excel 列设置”按钮，以及“选择文件/文件夹”按钮。"
+        "“返回主菜单”按钮与页面标题之间现在有合适的间距。此前两者过于贴近。",
+        "各功能页面不再显示 UniTrans 标志（仅在主菜单显示），使标题与返回按钮都有更充裕的空间。",
+        "“Excel 列设置”按钮现在与上方的“选择 Excel”按钮宽度完全一致，卡片对齐更整齐。"
       ]
     }
   }

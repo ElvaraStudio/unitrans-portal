@@ -3,6 +3,27 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.2.3",
+      "date": "2026-10-10",
+      "kind": "beta",
+      "en": {
+        "headline": "Header spacing",
+        "notes": [
+          "The Back to Main Menu button now has proper space between it and the section title. They were pressed right up against each other.",
+          "The UniTrans logo is no longer shown inside the sections - only on the main menu - which gives the heading and the back button room to breathe.",
+          "The Excel Columns button is now exactly the same width as the Choose Excel button above it, so the card lines up properly."
+        ]
+      },
+      "zh": {
+        "headline": "标题区域间距",
+        "notes": [
+          "\u201c返回主菜单\u201d按钮与页面标题之间现在有合适的间距。此前两者过于贴近。",
+          "各功能页面不再显示 UniTrans 标志（仅在主菜单显示），使标题与返回按钮都有更充裕的空间。",
+          "\u201cExcel 列设置\u201d按钮现在与上方的\u201c选择 Excel\u201d按钮宽度完全一致，卡片对齐更整齐。"
+        ]
+      }
+    },
+    {
       "version": "0.2.2",
       "date": "2026-10-10",
       "kind": "beta",

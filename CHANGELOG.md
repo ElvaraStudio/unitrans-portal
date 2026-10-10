@@ -24,6 +24,27 @@ behaviour can still change between versions.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
 
+## [0.2.3] - 2026-10-10
+
+### Changed
+
+- **The back button now has proper breathing room.** It sat directly against
+  the section heading with only a few pixels between them, so the two read as
+  one cramped block. The gap is now generous.
+- The UNITRANS logo is no longer shown inside a workflow section - only on the
+  main menu. It is a wide bitmap that crowded the heading and pushed the back
+  button up against the title; removing it there gives both room and puts the
+  back button at the very left edge where it is easiest to find.
+
+### Fixed
+
+- The `Excel Columns` button is now exactly the same width as the
+  `Choose Excel` button above it. They are stacked in the same column, and the
+  two differed by 51px, which made the card look misaligned. Equal width in
+  Tk's units was not sufficient, because Tk grows a button past its requested
+  width when a longer label needs the room; the button is now matched to the
+  picker's rendered width.
+
 ## [0.2.2] - 2026-10-10
 
 ### Fixed

@@ -88,12 +88,11 @@ def main() -> int:
     header_labels |= {f"\u2190  {app.tr('back_to_workflows')}"}
 
     print("=== uniformity: buttons in a group must share one width ===")
-    # Buttons fall into at most three visual groups per screen: the tall action
-    # column, the file pickers above the path entry boxes, and the secondary
-    # button inside a card (which Tk sizes from its own label metrics). Each
-    # group must be internally uniform; the exact pixel widths differ between
-    # groups because they are different sizes of button. The property that
-    # matters is that no button resizes when the language changes.
+    # Two visual groups per screen: the tall action buttons, and the file
+    # pickers above the path entry boxes (which are a shorter, narrower button
+    # by design). Each group must be internally uniform, and the pickers must
+    # also match the secondary button beneath them - a third distinct width
+    # means some button is sizing to its own label again.
     for screen in ("selector", "sort", "driver", "unlock"):
         buttons = screen_buttons(app, screen)
         widths = group_widths(buttons, header_labels)
@@ -103,10 +102,10 @@ def main() -> int:
             counts[width] = counts.get(width, 0) + 1
         summary = ", ".join(f"{count}x{width}px" for width, count in sorted(counts.items()))
         print(f"  {screen:9} groups: {summary}")
-        if len(distinct) > 3:
+        if len(distinct) > 2:
             failures.append(
                 f"{screen}: {len(distinct)} distinct button widths {distinct} - "
-                "expected at most three visual groups"
+                "expected at most two (action buttons, path pickers)"
             )
 
     print()

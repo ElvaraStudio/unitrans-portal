@@ -2809,34 +2809,47 @@ class WaybillSorterApp(tk.Tk):
         style.configure("TSpinbox", arrowsize=14)
 
     def _build_header(self, root: tk.Widget, title: str, subtitle: str, back: bool = False) -> None:
+        """Header strip: optionally a back button, then the title, then actions.
+
+        The logo is deliberately *not* shown inside a workflow. It is a wide
+        bitmap that crowds the title, and it pushed the back button and the
+        heading into adjacent columns with barely any gap between them. Dropping
+        it inside a workflow gives the back button and the title room to
+        breathe, and puts the back button at the very left edge where it is
+        easiest to find. The logo still heads the workflow selector.
+        """
         hero = tk.Frame(root, bg="#FFFFFF")
         hero.pack(fill=tk.X)
         hero.columnconfigure(1, weight=1)
 
-        # Inside a workflow the back button takes the leftmost slot, before the
-        # logo, because that is the first place the eye goes when looking for a
-        # way out. On the workflow selector there is nowhere to go back to, so
-        # the slot is unused and the logo keeps its position.
-        logo_column = 0
+        title_column = 0
         if back:
-            self._back_button(hero).grid(row=0, column=0, sticky="w", padx=(18, 0), pady=10)
-            logo_column = 4
-
-        logo_image = self.load_logo_image()
-        brand = tk.Label(hero, bg="#FFFFFF", padx=12, pady=6)
-        if logo_image is not None:
-            brand.configure(image=logo_image)
+            self._back_button(hero).grid(
+                row=0, column=0, sticky="w", padx=(18, 0), pady=14
+            )
+            title_column = 1
         else:
-            brand.configure(text=self.tr("brand"), fg="#082B52", font=("Segoe UI", 24, "bold"))
-        brand.grid(
-            row=0,
-            column=logo_column,
-            sticky="w",
-            padx=(48 if back else 18, 0),
-            pady=10,
-        )
+            logo_image = self.load_logo_image()
+            brand = tk.Label(hero, bg="#FFFFFF", padx=12, pady=6)
+            if logo_image is not None:
+                brand.configure(image=logo_image)
+            else:
+                brand.configure(
+                    text=self.tr("brand"), fg="#082B52", font=("Segoe UI", 24, "bold")
+                )
+            brand.grid(row=0, column=0, sticky="w", padx=(18, 0), pady=10)
+            title_column = 1
+
         title_frame = tk.Frame(hero, bg="#FFFFFF")
-        title_frame.grid(row=0, column=1, sticky="ew", pady=12)
+        title_frame.grid(
+            row=0,
+            column=title_column,
+            sticky="ew",
+            # Generous separation from the back button: they are unrelated
+            # controls, so they should not read as one block.
+            padx=(32 if back else 24, 12),
+            pady=12,
+        )
         tk.Label(
             title_frame,
             text=title,
@@ -3169,22 +3182,49 @@ class WaybillSorterApp(tk.Tk):
         )
         self._stat(excel_body, 1, self.tr("copy_amount"), self.copy_amount)
         self._stat(excel_body, 2, self.tr("container_rows"), self.container_count)
-        # Sits below the two stat rows, in column 0 only. The column carries no
-        # weight, so it takes the width the button asks for - which is the
-        # shared action-button width - and "ew" makes the button fill it. That
-        # lines it up with the action buttons rather than shrinking to its own
-        # label or stretching across the whole card.
+        # Sits below the two stat rows, in column 0 - the same column as the
+        # "Choose Excel" picker above it, so the two should end at the same x
+        # position. Equal width in Tk's units is not enough to guarantee that:
+        # Tk grows a button past its requested width when the label needs the
+        # room, and these two labels differ in length. The button is therefore
+        # wrapped in a frame that is matched to the picker's rendered width once
+        # the first layout pass has run - the only reliable way to make two
+        # differently-labelled buttons agree.
         excel_columns_button = self._secondary_button(
             excel_body, self.tr("excel_columns"), self.open_excel_columns_dialog,
             label_key="excel_columns",
         )
-        excel_body.columnconfigure(0, weight=0)
-        excel_columns_button.grid(
-            row=3,
-            column=0,
-            sticky="ew",
-            pady=(14, 0),
+        excel_columns_button.configure(width=0)
+        holder = tk.Frame(excel_body, bg="#FFFFFF")
+        holder.grid(row=3, column=0, sticky="w", pady=(14, 0))
+        excel_columns_button.pack(in_=holder, fill=tk.X)
+
+        picker = next(
+            (
+                child
+                for child in excel_body.winfo_children()
+                if isinstance(child, tk.Button)
+            ),
+            None,
         )
+
+        def match_picker_width() -> None:
+            """Give the holder the picker's exact width, once it is known."""
+            try:
+                if picker is None or not holder.winfo_exists():
+                    return
+                width = picker.winfo_width()
+                # A width of 1 means the layout has not run yet.
+                if width > 1:
+                    holder.configure(width=width)
+                    holder.pack_propagate(False)
+            except tk.TclError:
+                pass
+
+        try:
+            self.after(80, match_picker_width)
+        except tk.TclError:
+            pass
 
         pdf_shell, pdf_body = self._card(top_grid, self.tr("section_pdf"))
         pdf_shell.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
