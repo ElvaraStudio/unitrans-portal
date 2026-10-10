@@ -59,6 +59,10 @@ icon, and writes `releases\Unitrans-Portal-<version>.exe` with its SHA-256.
 `publish` creates the git tag and GitHub release and attaches the exe plus the
 manifest.
 
+Do **not** publish with `--prerelease`: GitHub hides pre-releases from
+`/releases/latest`, which is the URL the app's update check reads. A beta is a
+normal release here, labelled "Beta" by its version number.
+
 Test a build before publishing it:
 
 ```powershell

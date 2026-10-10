@@ -135,6 +135,20 @@ is a small document naming the newest version, where to download it, its size,
 and its SHA-256. If a newer version exists, the app shows what changed and can
 download and install it in place.
 
+> **Two constraints the updater depends on — do not break these:**
+>
+> 1. **The repository must be public.** An unauthenticated `GET` is the only way
+>    the app can read the manifest without shipping a credential inside the
+>    executable. Anyone can extract a string from a distributed `.exe`, so an
+>    embedded token is not a secret; it is a liability. A private repository
+>    returns `404` to the app.
+> 2. **Releases must not be GitHub pre-releases.** GitHub excludes pre-releases
+>    from `/releases/latest`, so a beta published that way is invisible to the
+>    updater. Beta status is carried by the version number (`0.1.0 (Beta)`) and
+>    the manifest's `beta` field, not by a GitHub release channel.
+>    `releasectl.py publish` therefore does not set `--prerelease` automatically;
+>    the flag exists but warns when used.
+
 Design decisions already made:
 
 - **Notify first, never mid-job.** The app reports an available update but does

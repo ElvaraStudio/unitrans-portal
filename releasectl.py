@@ -37,9 +37,12 @@ CHANGELOG = ROOT / "changelog.json"
 
 DEFAULT_REPO = "ElvaraStudio/unitrans-portal"
 
-#: Where the app looks for manifest.json. `latest` is a special GitHub URL that
-#: always resolves to the newest non-prerelease, so the app needs no API token
-#: and no knowledge of version numbers.
+#: Where the app looks for manifest.json. The `/releases/latest` URL is what
+#: makes this work without an API token or any knowledge of version numbers -
+#: but GitHub only resolves it to a release that is neither a draft nor a
+#: pre-release. A pre-release is invisible here, so do NOT publish beta
+#: versions as GitHub pre-releases; the app carries its own beta signal in the
+#: version number ("0.1.0 (Beta)") and in the manifest's `beta` field.
 MANIFEST_URL = f"https://github.com/{DEFAULT_REPO}/releases/latest/download/manifest.json"
 
 
@@ -166,7 +169,11 @@ def cmd_publish(args: argparse.Namespace) -> int:
         "--title", title,
         "--notes-file", str(notes_path),
     ]
-    if manifest.get("beta"):
+    # Deliberately NOT setting --prerelease from the manifest's `beta` flag.
+    # A GitHub pre-release is excluded from /releases/latest, which would make
+    # this version invisible to the updater. `beta` describes the app's own
+    # maturity; it is not a GitHub release channel.
+    if args.prerelease:
         command.append("--prerelease")
     if args.draft:
         command.append("--draft")
@@ -233,6 +240,15 @@ def main(argv: list[str] | None = None) -> int:
     p_publish = sub.add_parser("publish", help="Create the GitHub release and attach the artifacts.")
     p_publish.add_argument("--version", required=True, help="Version to publish, e.g. 0.1.0")
     p_publish.add_argument("--draft", action="store_true", help="Create as a draft instead of publishing.")
+    p_publish.add_argument(
+        "--prerelease",
+        action="store_true",
+        help=(
+            "Mark as a GitHub pre-release. WARNING: pre-releases are excluded from "
+            "/releases/latest, so the updater will not see this version. Only use this "
+            "for a build you do not intend users to pick up automatically."
+        ),
+    )
     p_publish.set_defaults(func=cmd_publish)
 
     args = parser.parse_args(argv)
