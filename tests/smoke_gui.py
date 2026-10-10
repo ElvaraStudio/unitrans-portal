@@ -57,6 +57,21 @@ def find_window_by_title(title: str, timeout: float = 20.0) -> int:
     return 0
 
 
+def hwnd_for_widget(widget: tk.Misc) -> int:
+    """Return the Win32 handle backing a Tk widget.
+
+    Much more reliable than searching windows by title: a Toplevel called
+    "Settings" is ambiguous on a machine that also runs the Windows Settings
+    app, and searching would happily capture the wrong window. Tk already knows
+    its own handle, so ask it directly.
+    """
+    widget.update_idletasks()
+    try:
+        return int(widget.winfo_id())
+    except (tk.TclError, ValueError):
+        return 0
+
+
 def capture_window(hwnd: int, destination: Path) -> bool:
     """Screenshot a single window by handle."""
     try:
@@ -131,10 +146,34 @@ def capture_window(hwnd: int, destination: Path) -> bool:
     return True
 
 
+def _make_console_utf8_safe() -> None:
+    """Stop the harness crashing when it prints non-ASCII window titles.
+
+    A default Windows console is cp1252, so printing a Chinese window title
+    raises UnicodeEncodeError. The application already reconfigures its own
+    stdio; the test harness needs the same treatment.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _make_console_utf8_safe()
     parser = argparse.ArgumentParser(description="Verify the GUI launches and renders.")
     parser.add_argument("--screenshot", help="Save a PNG of the main window here.")
     parser.add_argument("--keep-open", type=float, default=6.0, help="Seconds to leave the window up.")
+    parser.add_argument("--settings", action="store_true", help="Open the Settings window and check it renders.")
+    parser.add_argument(
+        "--update-dialog",
+        action="store_true",
+        help="Show the update-available dialog using a synthetic newer release.",
+    )
+    parser.add_argument("--language", choices=["en", "zh"], help="Switch language before capturing.")
     args = parser.parse_args(argv)
 
     from waybill_sorter import WaybillSorterApp
@@ -174,15 +213,55 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     print("PASS: version footer present in the widget tree.")
 
+    if args.language and app.language.get() != args.language:
+        app.toggle_language()
+        app.update_idletasks()
+        app.update()
+        print(f"PASS: switched language to {args.language!r} (title now {app.title()!r}).")
+
+    if args.settings:
+        if not hasattr(app, "open_settings"):
+            print("FAIL: the app has no Settings entry point.")
+            app.destroy()
+            return 1
+        app.open_settings()
+        app.update_idletasks()
+        app.update()
+        if app.settings_window is None or not app.settings_window.winfo_exists():
+            print("FAIL: the Settings window did not open.")
+            app.destroy()
+            return 1
+        print("PASS: Settings window opened.")
+        _report_labels(app.settings_window, "Settings", indent="      ")
+
+    if args.update_dialog:
+        result = _synthetic_update_result()
+        app.show_update_dialog(result)
+        app.update_idletasks()
+        app.update()
+        print("PASS: update-available dialog rendered for a synthetic newer release.")
+
     app.deiconify()
     app.lift()
     app.update()
 
-    hwnd = find_window_by_title(expected_title)
+    # Capture the dialog we just built, or the main window. Ask Tk for the
+    # handle rather than searching by title, which is ambiguous ("Settings" is
+    # also the name of a Windows app).
+    target = None
+    if args.update_dialog:
+        target = _last_toplevel(app)
+    elif args.settings and app.settings_window is not None:
+        target = app.settings_window
+
+    hwnd = hwnd_for_widget(target) if target is not None else 0
     if not hwnd:
-        print(f"FAIL: no visible top-level window titled {expected_title!r} appeared.")
-        app.destroy()
-        return 1
+        hwnd = find_window_by_title(expected_title)
+        if not hwnd:
+            print(f"FAIL: no visible top-level window titled {expected_title!r} appeared.")
+            app.destroy()
+            return 1
+        print("NOTE: falling back to the main window for capture.")
     print(f"PASS: window handle 0x{hwnd:x} found and visible.")
 
     if args.screenshot:
@@ -197,6 +276,69 @@ def main(argv: list[str] | None = None) -> int:
     app.destroy()
     print("PASS: GUI built, rendered, and shut down cleanly.")
     return 0
+
+
+def _last_toplevel(app: tk.Misc) -> tk.Misc | None:
+    """The most recently created Toplevel child, i.e. the dialog just opened."""
+    toplevels = [child for child in app.winfo_children() if isinstance(child, tk.Toplevel)]
+    return toplevels[-1] if toplevels else None
+
+
+def _report_labels(window: tk.Misc, heading: str, indent: str = "      ") -> None:
+    """Print the text of every label in a window, to confirm nothing is a raw key."""
+    texts = []
+
+    def walk(widget):
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Label):
+                try:
+                    texts.append(str(child.cget("text")))
+                except tk.TclError:
+                    pass
+            walk(child)
+
+    walk(window)
+    print(f"{indent}{heading} labels:")
+    for text in texts:
+        flag = "  <-- UNRESOLVED KEY?" if text.islower() and "_" in text else ""
+        print(f"{indent}  - {text!r}{flag}")
+
+
+def _synthetic_update_result():
+    """A fabricated 'newer release' so the update dialog can be seen today.
+
+    0.2.0 does not exist yet, so the only way to verify this dialog renders
+    before that release is to hand the UI a made-up result.
+    """
+    from updater import UpdateCheckResult
+
+    result = UpdateCheckResult(status="update-available", current_version="0.1.0")
+    result.remote_version = "0.2.0"
+    result.download_url = "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.0/Unitrans-Portal-0.2.0.exe"
+    result.release_page = "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0"
+    result.size_bytes = 24_900_000
+    result.sha256 = "b" * 64
+    result.notes = {
+        "en": {
+            "headline": "Sample update",
+            "notes": [
+                "Synthetic note for layout verification - not a real release.",
+                "Second line to confirm the notes pane scrolls and wraps properly.",
+            ],
+        },
+        "zh": {
+            "headline": "\u793a\u4f8b\u66f4\u65b0",
+            "notes": [
+                "\u7528\u4e8e\u68c0\u67e5\u5e03\u5c40\u7684\u793a\u4f8b\u6587\u5b57\u3002",
+                "\u7b2c\u4e8c\u884c\u7528\u4e8e\u786e\u8ba4\u5907\u6ce8\u533a\u57df\u53ef\u4ee5\u6b63\u5e38\u6362\u884c\u3002",
+            ],
+        },
+    }
+    return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
 
 
 if __name__ == "__main__":

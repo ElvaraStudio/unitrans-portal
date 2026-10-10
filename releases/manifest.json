@@ -1,38 +1,36 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.1.0",
-  "display_version": "0.1.0 (Beta)",
+  "version": "0.2.0",
+  "display_version": "0.2.0 (Beta)",
   "published": "2026-10-10",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.1.0/Unitrans-Portal-0.1.0.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.1.0",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.0/Unitrans-Portal-0.2.0.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0",
   "file": {
-    "name": "Unitrans-Portal-0.1.0.exe",
-    "size": 24403427,
-    "sha256": "49e9a5e96a438fcfed419deb6f45c32b6722d967aa97ec652b228915817d1bed"
+    "name": "Unitrans-Portal-0.2.0.exe",
+    "size": 24418908,
+    "sha256": "b65f86ed8152345e1550dd7e29d1dc904ed99feafa819cbb8d08a0d9df65c65f"
   },
   "notes": {
     "en": {
-      "headline": "First beta release",
+      "headline": "Settings and update checking",
       "notes": [
-        "Version numbering restarts at 0.1.0. The earlier internal builds were labelled 1.0; no features were removed, the beta simply gets an honest number. The app is now called Unitrans Portal.",
-        "Sort waybill PDFs into the same order as the Excel workbook, with a SHA-256 verification that every sorted file is a byte-for-byte copy of the original download.",
-        "Create one bulk PDF for printing, with optional separator pages between waybills and digital sequence marks on forms 1 and 4.",
-        "Fill blank driver numbers from scanned waybill images.",
-        "Unlock PDFs that open but are blocked from editing or printing by permissions-style encryption.",
-        "The application now carries a proper icon and version information, so Windows shows which build is installed instead of leaving it blank."
+        "New Settings window, reached from the Settings button in the top-right corner. It shows which version you have installed.",
+        "You can now check for updates yourself. The app asks the release server whether a newer version exists, and if there is one it shows you what changed and offers a link to download it.",
+        "Release notes appear in whichever language you are using the app in.",
+        "Update checks never interrupt your work. If there is no internet connection, or the network blocks the release server, the app simply tells you it could not check.",
+        "This version does not check for updates by itself - you start the check from the Settings window."
       ]
     },
     "zh": {
-      "headline": "首个测试版本",
+      "headline": "设置与更新检查",
       "notes": [
-        "版本号从 0.1.0 重新开始。之前的内部版本标记为 1.0；没有移除任何功能，只是为测试版使用了准确的版本号。软件名称现为 Unitrans Portal。",
-        "按 Excel 工作表的顺序整理运单 PDF，并使用 SHA-256 校验每个文件与原始下载完全一致。",
-        "可生成用于打印的合并 PDF，并可选在运单之间插入分隔页、在单据 1 和 4 上标注序列号。",
-        "从扫描的运单图片中自动填写空白的司机车号。",
-        "解锁可以打开但受权限加密限制无法编辑或打印的 PDF。",
-        "软件现在带有正式图标和版本信息，Windows 中可直接查看已安装的版本。"
+        "新增“设置”窗口，可通过右上角的“设置”按钮打开，其中会显示当前已安装的版本。",
+        "现在可以手动检查更新。软件会向发布服务器查询是否有新版本；如有，会显示更新内容并提供下载链接。",
+        "更新说明会以您当前使用的界面语言显示。",
+        "检查更新不会中断您的工作。如果没有网络连接，或网络无法访问发布服务器，软件只会提示无法检查。",
+        "此版本不会自动检查更新，需要您在“设置”窗口中手动开始检查。"
       ]
     }
   }

@@ -15,9 +15,50 @@ behaviour can still change between versions.
 
 ### Planned
 
-- In-app update checking and one-click updating from GitHub Releases.
+- One-click in-app updating: download the new build, verify its SHA-256, and
+  replace the installed executable with automatic rollback if the swap fails.
+  Today the app tells you an update exists and opens the download page.
+- Automatic update checks on launch. The setting is stored but the feature is
+  not implemented; checking is manual.
 - Inno Setup installer, per-user, so no administrator rights are needed.
-- Chinese translation review of the new release-notes text.
+- `progress_value` and `progress_text` are written but never displayed - there
+  is no progress bar in the current UI. Either wire one up or remove them.
+
+## [0.2.0] - 2026-10-10
+
+### Added
+
+- **Settings window**, reached from the new `Settings` button in the header. It
+  shows the installed version and provides `Check for updates now`.
+- **Manual update check.** The app reads the published release manifest, compares
+  the version numerically, and either confirms you are current or shows what
+  changed with a button to open the download page. Being offline, behind a
+  blocked network, or receiving a malformed manifest all report a plain message
+  rather than failing - a check never interrupts work.
+- Release notes are shown in the user's chosen language, falling back to English.
+- `--check-updates` command-line flag, which performs the same check with no GUI
+  and returns an exit code: 0 up to date, 2 update available, 1 check failed.
+- Settings are stored per-user in `%APPDATA%\UnitransPortal\settings.json`,
+  written atomically, so a preference survives an update and a corrupt file
+  degrades to defaults instead of stopping the app.
+
+### Changed
+
+- **Version numbering corrected to 0.2.0.** The previous release was published
+  as 0.1.0 but contains no update checking at all, so 0.1.1 would misrepresent
+  it: this adds a feature, and it is the release that makes the existing
+  `0.1.0` installs able to see updates.
+
+### Fixed
+
+- Removed five methods that were defined twice in the application class
+  (`append_log`, `clear_log`, `toggle_language`, `set_busy`,
+  `update_action_state`) plus an orphaned `localize_log`. Python keeps only the
+  last definition of a method, so the earlier copies were unreachable dead code
+  left behind by an older generation of the UI. No behaviour changed - the
+  removed code could not run - but editing it would have had no effect, which
+  is a trap for whoever works on this next. A test now fails if it recurs.
+- `save_settings` no longer raises on a malformed path; it reports failure.
 
 ## [0.1.0] - 2026-10-10
 
@@ -67,5 +108,6 @@ First beta release.
   permissions-style encryption.
 - English and Chinese interface.
 
-[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.1.0

@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 import unicodedata
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
@@ -43,7 +44,9 @@ else:
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from version import APP_VERSION, version_label
+import settings as app_settings
+from updater import check_for_update, format_size
+from version import APP_VERSION, display_version, version_label
 
 
 SEQ_HEADER = "\u5e8f\u53f7"
@@ -2128,6 +2131,29 @@ I18N = {
         "close_options": "Close",
         "clear_log": "Clear Log",
         "language": "中文",
+        "settings": "Settings",
+        "settings_title": "Settings",
+        "settings_about": "About",
+        "settings_updates": "Updates",
+        "settings_version": "Installed version",
+        "settings_check_now": "Check for updates now",
+        "settings_checking": "Checking for updates\u2026",
+        "settings_up_to_date": "You are running the latest version.",
+        "settings_update_available": "Version {version} is available.",
+        "settings_check_failed": "Could not check for updates: {error}",
+        "settings_auto_note": "This version does not check for updates on its own. Use the button above to check manually.",
+        "settings_last_checked": "Last checked: {when}",
+        "settings_never_checked": "Never checked",
+        "settings_close": "Close",
+        "update_title": "Update available",
+        "update_heading": "Version {version} is available",
+        "update_current": "You are running {current}.",
+        "update_size": "Download size: {size}",
+        "update_whats_new": "What's new",
+        "update_download": "Open download page",
+        "update_later": "Later",
+        "update_open_failed": "Could not open the download page in a browser.\n\n{url}",
+        "update_notes_missing": "No release notes were published for this version.",
         "missing_excel_title": "Missing Excel",
         "missing_excel": "Choose the Excel file first.",
         "missing_folder_title": "Missing PDF Folder",
@@ -2246,6 +2272,29 @@ I18N = {
         "close_options": "关闭",
         "clear_log": "清空记录",
         "language": "English",
+        "settings": "设置",
+        "settings_title": "设置",
+        "settings_about": "关于",
+        "settings_updates": "更新",
+        "settings_version": "已安装版本",
+        "settings_check_now": "立即检查更新",
+        "settings_checking": "正在检查更新…",
+        "settings_up_to_date": "当前已是最新版本。",
+        "settings_update_available": "有新版本 {version} 可用。",
+        "settings_check_failed": "无法检查更新：{error}",
+        "settings_auto_note": "此版本不会自动检查更新。请使用上方按钮手动检查。",
+        "settings_last_checked": "上次检查：{when}",
+        "settings_never_checked": "从未检查",
+        "settings_close": "关闭",
+        "update_title": "有可用更新",
+        "update_heading": "有新版本 {version} 可用",
+        "update_current": "当前版本为 {current}。",
+        "update_size": "下载大小：{size}",
+        "update_whats_new": "更新内容",
+        "update_download": "打开下载页面",
+        "update_later": "稍后",
+        "update_open_failed": "无法在浏览器中打开下载页面。\n\n{url}",
+        "update_notes_missing": "此版本没有发布更新说明。",
         # See the English block: the footer version label is language-neutral.
         "missing_excel_title": "缺少 Excel",
         "missing_excel": "请先选择 Excel 文件。",
@@ -2335,6 +2384,13 @@ class WaybillSorterApp(tk.Tk):
         self.unlock_pdf_count = tk.StringVar(value="-")
         self.latest_unlock_result: PdfUnlockResult | None = None
         self.options_window: tk.Toplevel | None = None
+        self.settings_window: tk.Toplevel | None = None
+        # Loaded once at startup; written back when the user changes something.
+        self.user_settings: dict[str, object] = app_settings.load_settings()
+        # Owns the update-check thread. Kept so a close during a check does not
+        # leave a callback pointing at a destroyed window.
+        self.update_check_token = 0
+        self.update_check_running = False
         self.log_history: list[tuple[str, str]] = []
         self.widgets: dict[str, object] = {}
 
@@ -2497,6 +2553,12 @@ class WaybillSorterApp(tk.Tk):
             font=("Segoe UI", 11),
             anchor="w",
         ).pack(fill=tk.X, pady=(2, 0))
+        self._secondary_button(hero, self.tr("settings"), self.open_settings).grid(
+            row=0,
+            column=3,
+            sticky="e",
+            padx=(0, 18),
+        )
         self._secondary_button(hero, self.tr("language"), self.toggle_language).grid(
             row=0,
             column=2,
@@ -2820,68 +2882,6 @@ class WaybillSorterApp(tk.Tk):
             anchor="e",
         ).pack(fill=tk.X, pady=4)
 
-    def append_log(self, message: str) -> None:
-        timestamp = dt.datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert(tk.END, f"[{timestamp}] {message}\n")
-        self.log_text.see(tk.END)
-
-    def localize_log(self, message: str) -> str:
-        if self.language.get() != "zh":
-            return message
-        patterns = (
-            (r"^Copy amount from Excel name: (.+)$", "Excel 名称识别份数：{0}"),
-            (r"^Loaded (\d+) container rows from Excel\.$", "已从 Excel 读取 {0} 个箱号。"),
-            (r"^Scanning (\d+) PDF files\.$", "正在扫描 {0} 个 PDF 文件。"),
-            (r"^Finished\. Sorted files are in: (.+)$", "完成。排序文件夹：{0}"),
-            (r"^Check sort_report\.csv for missing or unmatched files\.$", "请查看 sort_report.csv 中缺少或未匹配的文件。"),
-            (r"^Creating bulk PDF with (\d+) copies per waybill\.$", "正在生成合并 PDF，每票 {0} 份。"),
-            (r"^Bulk PDF created: (.+)$", "合并 PDF 已生成：{0}"),
-            (r"^Copy verification: (\d+)/(\d+) sorted PDFs are byte-for-byte identical to the downloads\.$", "复制校验：{0}/{1} 个排序 PDF 与下载文件逐字节一致。"),
-            (r"^Safe bulk PDF mode: original PDF pages only; no separator pages or digital sequence marks\.$", "安全合并 PDF 模式：只使用原始 PDF 页面，不加分隔页或电子序号。"),
-            (r"^Optional bulk PDF extras enabled: (.+)\.$", "已开启可选合并 PDF 功能：{0}。"),
-        )
-        for pattern, replacement in patterns:
-            match = re.match(pattern, message)
-            if match:
-                return replacement.format(*match.groups())
-        match = re.match(r"^(\[\d+/\d+\]) (.+) -> not matched$", message)
-        if match:
-            return f"{match.group(1)} {match.group(2)} -> 未匹配"
-        match = re.match(r"^(\[\d+/\d+\]) (.+) -> ([A-Z]{4}\d{7}) \((.+)\)$", message)
-        if match:
-            return f"{match.group(1)} {match.group(2)} -> {match.group(3)}"
-        match = re.match(r"^(\[\d+/\d+\]) (.+) -> ([A-Z]{4}\d{7}): (\d+) \((.+)\)$", message)
-        if match:
-            return f"{match.group(1)} {match.group(2)} -> {match.group(3)}：{match.group(4)}"
-        return message
-
-    def clear_log(self) -> None:
-        self.log_text.delete("1.0", tk.END)
-
-    def toggle_language(self) -> None:
-        self.language.set("zh" if self.language.get() == "en" else "en")
-        self.title(self.tr("window_title"))
-        if self.status_text.get() in (I18N["en"]["status_start"], I18N["zh"]["status_start"]):
-            self.status_text.set(self.tr("status_start"))
-        for child in self.winfo_children():
-            child.destroy()
-        self._build_ui()
-
-    def set_busy(self, is_busy: bool, status_key: str | None = None) -> None:
-        self.worker_running = is_busy
-        if status_key:
-            self.status_text.set(self.tr(status_key))
-        self.update_action_state()
-
-    def update_action_state(self) -> None:
-        if not hasattr(self, "sort_button"):
-            return
-        can_act = not self.worker_running
-        has_result = self.latest_result is not None
-        self._set_primary_button_enabled(self.sort_button, can_act)
-        self._set_primary_button_enabled(self.make_pdf_button, can_act and has_result)
-        self._set_primary_button_enabled(self.open_output_button, can_act and has_result)
-
     def set_progress(self, value: float = 0, text: str = "") -> None:
         self.progress_value.set(max(0, min(100, value)))
         self.progress_text.set(text)
@@ -3029,6 +3029,231 @@ class WaybillSorterApp(tk.Tk):
         y = self.winfo_rooty() + max(40, (self.winfo_height() - window.winfo_height()) // 3)
         window.geometry(f"+{x}+{y}")
 
+    def open_settings(self) -> None:
+        """Settings window: version information and a manual update check."""
+        if self.settings_window is not None:
+            try:
+                if self.settings_window.winfo_exists():
+                    self.settings_window.lift()
+                    self.settings_window.focus_force()
+                    return
+            except tk.TclError:
+                self.settings_window = None
+
+        window = tk.Toplevel(self)
+        self.settings_window = window
+        window.title(self.tr("settings_title"))
+        window.configure(bg="#FFFFFF")
+        window.resizable(False, False)
+        window.transient(self)
+
+        body = tk.Frame(window, bg="#FFFFFF", padx=24, pady=20)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            body, text=self.tr("settings_about"), bg="#FFFFFF", fg="#12355F",
+            font=("Segoe UI", 12, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+        tk.Label(
+            body, text=self.tr("settings_version"), bg="#FFFFFF", fg="#4B5F7A",
+            font=("Segoe UI", 10), anchor="w",
+        ).pack(fill=tk.X, pady=(8, 0))
+        tk.Label(
+            body, text=version_label(), bg="#FFFFFF", fg="#082B52",
+            font=("Segoe UI", 13, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+
+        ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+
+        tk.Label(
+            body, text=self.tr("settings_updates"), bg="#FFFFFF", fg="#12355F",
+            font=("Segoe UI", 12, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+
+        status = tk.Label(
+            body, text=self._last_checked_text(), bg="#FFFFFF", fg="#4B5F7A",
+            font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
+        )
+        status.pack(fill=tk.X, pady=(8, 10))
+
+        check_button = self._primary_button(body, self.tr("settings_check_now"), lambda: None)
+        check_button.configure(command=lambda: start_check())
+        check_button.pack(fill=tk.X)
+
+        tk.Label(
+            body, text=self.tr("settings_auto_note"), bg="#FFFFFF", fg="#6B7280",
+            font=("Segoe UI", 9), anchor="w", justify="left", wraplength=430,
+        ).pack(fill=tk.X, pady=(10, 16))
+
+        close_button = self._secondary_button(body, self.tr("settings_close"), window.destroy)
+        close_button.pack(fill=tk.X)
+
+        def start_check() -> None:
+            if self.update_check_running:
+                return
+            self.update_check_running = True
+            self._set_primary_button_enabled(check_button, False)
+            status.configure(text=self.tr("settings_checking"), fg="#4B5F7A")
+
+            # Bumped whenever a new check starts; a result carrying a stale
+            # token is discarded rather than written into a recycled window.
+            self.update_check_token += 1
+            token = self.update_check_token
+
+            def worker() -> None:
+                result = check_for_update()
+                # Hop back to the Tk main thread - widgets must not be touched
+                # from a worker.
+                try:
+                    self.after(0, lambda: finish(result, token))
+                except (tk.TclError, RuntimeError):
+                    pass  # window went away while the request was in flight
+
+            def finish(result, check_token: int) -> None:
+                if check_token != self.update_check_token:
+                    return
+                self.update_check_running = False
+                try:
+                    if not window.winfo_exists():
+                        return
+                except tk.TclError:
+                    return
+                self._set_primary_button_enabled(check_button, True)
+                self._apply_update_check_result(result, status)
+
+            threading.Thread(target=worker, name="update-check", daemon=True).start()
+
+        def on_close() -> None:
+            self.settings_window = None
+            window.destroy()
+
+        window.protocol("WM_DELETE_WINDOW", on_close)
+        window.update_idletasks()
+        x = self.winfo_rootx() + max(40, (self.winfo_width() - window.winfo_width()) // 2)
+        y = self.winfo_rooty() + max(40, (self.winfo_height() - window.winfo_height()) // 3)
+        window.geometry(f"+{x}+{y}")
+
+    def _last_checked_text(self) -> str:
+        """'Last checked: ...' or 'Never checked'."""
+        stored = str(self.user_settings.get("last_update_check") or "")
+        if not stored:
+            return self.tr("settings_never_checked")
+        try:
+            moment = dt.datetime.fromisoformat(stored)
+        except ValueError:
+            return self.tr("settings_never_checked")
+        return self.tr("settings_last_checked", when=moment.strftime("%Y-%m-%d %H:%M"))
+
+    def _apply_update_check_result(self, result: object, status: tk.Label) -> None:
+        """Render the outcome of an update check into the settings window."""
+        if not getattr(result, "ok", False):
+            status.configure(
+                text=self.tr("settings_check_failed", error=getattr(result, "error", "")),
+                fg="#B3261E",
+            )
+            return
+
+        # Record the successful check so "last checked" is meaningful next time.
+        self.user_settings = app_settings.update_settings(
+            last_update_check=dt.datetime.now().isoformat(timespec="seconds")
+        )
+
+        if getattr(result, "update_available", False):
+            remote = str(getattr(result, "remote_version", ""))
+            status.configure(
+                text=self.tr("settings_update_available", version=remote),
+                fg="#0B5CAD",
+            )
+            self.show_update_dialog(result)
+        else:
+            status.configure(
+                text=f"{self.tr('settings_up_to_date')}  ({self._last_checked_text()})",
+                fg="#1B7F3B",
+            )
+
+    def show_update_dialog(self, result: object) -> None:
+        """Tell the user what changed, with a link to download it.
+
+        Notify-only by design: the app opens the release page rather than
+        replacing its own executable. Self-replacement needs a verified
+        download and a rollback path, which is a separate change.
+        """
+        remote = str(getattr(result, "remote_version", ""))
+        window = tk.Toplevel(self)
+        window.title(self.tr("update_title"))
+        window.configure(bg="#FFFFFF")
+        window.transient(self)
+
+        body = tk.Frame(window, bg="#FFFFFF", padx=24, pady=20)
+        body.pack(fill=tk.BOTH, expand=True)
+
+        tk.Label(
+            body, text=self.tr("update_heading", version=remote), bg="#FFFFFF",
+            fg="#082B52", font=("Segoe UI", 15, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+        tk.Label(
+            body, text=self.tr("update_current", current=version_label()), bg="#FFFFFF",
+            fg="#4B5F7A", font=("Segoe UI", 10), anchor="w",
+        ).pack(fill=tk.X, pady=(4, 0))
+
+        size_text = format_size(getattr(result, "size_bytes", None))
+        if size_text:
+            tk.Label(
+                body, text=self.tr("update_size", size=size_text), bg="#FFFFFF",
+                fg="#4B5F7A", font=("Segoe UI", 10), anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
+
+        tk.Label(
+            body, text=self.tr("update_whats_new"), bg="#FFFFFF", fg="#12355F",
+            font=("Segoe UI", 12, "bold"), anchor="w",
+        ).pack(fill=tk.X, pady=(16, 6))
+
+        language = "zh" if self.language.get() == "zh" else "en"
+        notes = result.notes_for(language) if hasattr(result, "notes_for") else []
+        if not notes:
+            notes = [self.tr("update_notes_missing")]
+
+        notes_frame = tk.Frame(body, bg="#FFFFFF")
+        notes_frame.pack(fill=tk.BOTH, expand=True)
+        notes_text = tk.Text(
+            notes_frame, height=9, wrap=tk.WORD, font=("Segoe UI", 10),
+            bg="#F8FAFC", fg="#0F172A", relief=tk.FLAT, padx=10, pady=10,
+            highlightbackground="#D5DCE7", highlightthickness=1,
+        )
+        notes_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(notes_frame, orient=tk.VERTICAL, command=notes_text.yview)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        notes_text.configure(yscrollcommand=scrollbar.set)
+        for note in notes:
+            notes_text.insert(tk.END, f"\u2022 {note}\n\n")
+        notes_text.configure(state=tk.DISABLED)
+
+        buttons = tk.Frame(body, bg="#FFFFFF")
+        buttons.pack(fill=tk.X, pady=(16, 0))
+
+        url = str(getattr(result, "release_page", "") or getattr(result, "download_url", ""))
+
+        def open_download() -> None:
+            try:
+                if not webbrowser.open(url):
+                    raise RuntimeError("browser refused")
+            except Exception:
+                messagebox.showerror(
+                    self.tr("update_title"),
+                    self.tr("update_open_failed", url=url),
+                    parent=window,
+                )
+
+        self._primary_button(buttons, self.tr("update_download"), open_download).pack(side=tk.RIGHT)
+        self._secondary_button(buttons, self.tr("update_later"), window.destroy).pack(
+            side=tk.RIGHT, padx=(0, 8)
+        )
+
+        window.update_idletasks()
+        x = self.winfo_rootx() + max(40, (self.winfo_width() - window.winfo_width()) // 2)
+        y = self.winfo_rooty() + max(40, (self.winfo_height() - window.winfo_height()) // 3)
+        window.geometry(f"+{x}+{y}")
+
     def localize_log_v2(self, message: str) -> str:
         patterns = (
             (r"^Copy amount from Excel name: (.+)$", "Excel 名称识别补充文件数：{0}"),
@@ -3112,6 +3337,17 @@ class WaybillSorterApp(tk.Tk):
             except tk.TclError:
                 pass
             self.options_window = None
+        # The settings window is rebuilt in the new language by open_settings.
+        # Invalidate any in-flight check so its callback cannot write into the
+        # destroyed window.
+        self.update_check_token += 1
+        if self.settings_window is not None:
+            try:
+                if self.settings_window.winfo_exists():
+                    self.settings_window.destroy()
+            except tk.TclError:
+                pass
+            self.settings_window = None
         workflow = self.current_workflow
         self._clear_window()
         if workflow == "sort":
@@ -3763,6 +3999,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--make-print-pdf", action="store_true", help="Create one bulk PDF after sorting.")
     parser.add_argument("--mark-sequence", action="store_true", help="Stamp the sequence number on detected form 1 and form 4 pages.")
     parser.add_argument("--unlock-pdfs", action="store_true", help="Remove blank-password/permissions encryption from a PDF folder.")
+    parser.add_argument("--check-updates", action="store_true", help="Check GitHub for a newer release and exit.")
     return parser.parse_args(argv)
 
 
@@ -3775,9 +4012,44 @@ def configure_stdio() -> None:
                 pass
 
 
+def run_check_updates_cli() -> int:
+    """``--check-updates``: same check the Settings window performs, no GUI.
+
+    Exit codes: 0 = up to date, 2 = an update is available, 1 = check failed.
+    """
+    result = check_for_update()
+    print(f"Installed version: {result.current_version} ({display_version(result.current_version)})")
+
+    if not result.ok:
+        print(f"Update check failed: {result.error}", file=sys.stderr)
+        return 1
+
+    if not result.update_available:
+        print("You are running the latest version.")
+        return 0
+
+    print(f"Update available: {result.remote_version}")
+    if result.release_page:
+        print(f"Release page: {result.release_page}")
+    if result.download_url:
+        print(f"Download: {result.download_url}")
+    size = format_size(result.size_bytes)
+    if size:
+        print(f"Size: {size}")
+    for note in result.notes_for("en"):
+        print(f"  - {note}")
+    return 2
+
+
 def main(argv: list[str] | None = None) -> int:
     configure_stdio()
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.check_updates:
+        try:
+            return run_check_updates_cli()
+        except Exception as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
     if args.unlock_pdfs:
         if not args.pdf_folder:
             print("--unlock-pdfs requires --pdf-folder.", file=sys.stderr)

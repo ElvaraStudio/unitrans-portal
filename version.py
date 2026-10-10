@@ -33,7 +33,7 @@ from typing import Iterable, Sequence
 # --------------------------------------------------------------------------
 
 APP_NAME = "Unitrans Portal"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 
 #: True while the version is still 0.x. Drives the "(Beta)" suffix in the UI.
 BETA = True
