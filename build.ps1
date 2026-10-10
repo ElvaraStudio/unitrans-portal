@@ -171,7 +171,38 @@ if (-not (Test-Path $ReleaseDir)) { New-Item -ItemType Directory -Path $ReleaseD
 
 $SafeName = ($ProductName -replace '\s+', '-')
 $ReleaseExe = Join-Path $ReleaseDir "$SafeName-$Version.exe"
+
+# A running copy of the app holds its own .exe open, so the copy below fails
+# with a bare "being used by another process". Fail early with something
+# actionable instead. Note the PyInstaller onefile child process shows up under
+# the artifact's name, not under the bootloader's, so match on the app name.
+$Running = Get-Process -Name $SafeName -ErrorAction SilentlyContinue
+if ($Running) {
+    $ids = ($Running | Select-Object -ExpandProperty Id) -join ', '
+    throw "Unitrans Portal is currently running (PID $ids). Close it before building - a running copy locks its own executable."
+}
+
 Copy-Item -LiteralPath $BuiltExe -Destination $ReleaseExe -Force
+
+# Keep this folder unambiguous: it should hold exactly one build, the one just
+# produced. Stale artifacts are what caused the mess this release cleans up -
+# two exes, neither self-describing, and no way to tell which was current.
+# Published builds live on the GitHub Release page, not here.
+$Stale = Get-ChildItem -LiteralPath $ReleaseDir -Filter '*.exe' -File |
+    Where-Object { $_.FullName -ne $ReleaseExe }
+foreach ($old in $Stale) {
+    # Recycle Bin rather than a hard delete, so a mistaken cleanup is recoverable.
+    try {
+        Add-Type -AssemblyName Microsoft.VisualBasic -ErrorAction Stop
+        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile(
+            $old.FullName,
+            [Microsoft.VisualBasic.FileIO.UIOption]::OnlyErrorDialogs,
+            [Microsoft.VisualBasic.FileIO.RecycleOption]::SendToRecycleBin)
+        Write-Host "Removed superseded build: $($old.Name)" -ForegroundColor Yellow
+    } catch {
+        Write-Warning "Could not remove stale build '$($old.Name)': $($_.Exception.Message)"
+    }
+}
 
 $Hash = Get-FileHash -LiteralPath $ReleaseExe -Algorithm SHA256
 $SizeBytes = (Get-Item -LiteralPath $ReleaseExe).Length

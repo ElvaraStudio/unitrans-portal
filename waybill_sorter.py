@@ -2057,7 +2057,7 @@ def create_print_batch_pdf(
 
 I18N = {
     "en": {
-        "window_title": "UniTrans Waybill Sorter",
+        "window_title": "Unitrans Portal",
         "brand": "UNITRANS",
         "workflow_title": "Choose Workflow",
         "workflow_subtitle": "Select what you want to do today.",
@@ -2128,8 +2128,6 @@ I18N = {
         "close_options": "Close",
         "clear_log": "Clear Log",
         "language": "中文",
-        # The footer version string is built by version.version_label() instead,
-        # because "Version 0.1.0 (Beta)" is identical in both languages.
         "missing_excel_title": "Missing Excel",
         "missing_excel": "Choose the Excel file first.",
         "missing_folder_title": "Missing PDF Folder",
@@ -2177,7 +2175,7 @@ I18N = {
         "pdf_check_mismatch": "check mismatch",
     },
     "zh": {
-        "window_title": "UniTrans 运单排序工具",
+        "window_title": "Unitrans Portal 运单排序工具",
         "brand": "UNITRANS",
         "workflow_title": "选择工作流程",
         "workflow_subtitle": "请选择今天要处理的任务。",
@@ -2222,6 +2220,14 @@ I18N = {
         "missing_images_title": "缺少图片文件夹",
         "missing_images": "请选择包含运单扫描图片的文件夹。",
         "choose_excel": "选择 Excel",
+        "excel_columns": "Excel 列设置",
+        "excel_columns_title": "Excel 列设置",
+        "excel_columns_note": "当工作表的表头不常见时使用。请填写 Excel 列字母，例如 A 和 C。",
+        "header_row": "表头行",
+        "sequence_column": "序号列",
+        "container_column": "箱号列",
+        "apply": "应用",
+        "cancel": "取消",
         "choose_folder": "选择 PDF 文件夹",
         "choose_pdf_in_folder": "请选择该文件夹中的任意 PDF",
         "copy_amount": "Excel 补充文件数",

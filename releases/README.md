@@ -1,37 +1,76 @@
 # Releases
 
-Built artifacts, kept because a build cannot always be reproduced later.
+Published artifacts for Unitrans Portal. The executables here are **not**
+stored in git — they are attached to the corresponding
+[GitHub Release](https://github.com/ElvaraStudio/unitrans-portal/releases) and
+are gitignored locally.
 
-| File | Built | Notes |
+Tracked in this folder:
+
+| File | Purpose |
+|---|---|
+| `README.md` | This file. |
+| `manifest.json` | Describes the newest published build: version, download URL, size and SHA-256. This is what the app's update check reads. |
+
+Everything else here is a build artifact and can be deleted safely; run
+`build.ps1` to regenerate.
+
+## Current release
+
+| Version | Artifact | Built | Size | SHA-256 |
+|---|---|---|---|---|
+| 0.1.0 | `Unitrans-Portal-0.1.0.exe` | 2026-10-10 | 23.3 MB | _(see `manifest.json`)_ |
+
+The hash of record is always the one in `manifest.json`, so there is only one
+place to check. `releasectl.py` refuses to publish if the artifact has changed
+since the manifest was generated.
+
+## Version history
+
+| Version | Date | Notes |
 |---|---|---|
-| `UniTrans Waybill Sorter.exe` | 2026-06-15 09:42 | **Current build.** Matches `waybill_sorter.py` as of 09:40 and the 1.0 feature set in `../README.md`. |
-| `UniTrans Waybill Sorter 1.0.exe` | 2026-06-15 08:43 | Earlier build from a source revision that no longer exists on disk. **Cannot be rebuilt** — kept as a rollback. |
-| `UniTrans-Waybill-Sorter-transfer-20260615.zip` | 2026-06-15 16:31 | Hand-off bundle containing source, spec and both executables. Redundant with this folder — delete it if you do not need to re-send it. |
+| 0.1.0 | 2026-10-10 | First beta. Versioning restarted from the old `1.0` label; app renamed to Unitrans Portal. |
 
-## Rebuilding
+## Retired builds
+
+Two pre-beta executables were removed when 0.1.0 was published:
+
+| File | Built | Why it was removed |
+|---|---|---|
+| `UniTrans Waybill Sorter 1.0.exe` | 2026-06-15 08:43 | Predated the current source by an hour; the source revision it came from no longer exists and it cannot be rebuilt. |
+| `UniTrans Waybill Sorter.exe` | 2026-06-15 09:42 | Superseded by `Unitrans-Portal-0.1.0.exe`. Kept no version metadata, so it could not be identified from Explorer. |
+
+The old `UniTrans-Waybill-Sorter-transfer-20260615.zip` hand-off bundle had
+already been deleted before this cleanup; it contained the same executables plus
+source that is now in git.
+
+## Rebuilding and publishing
 
 From the project root:
 
 ```powershell
 .\build.ps1
+.\.venv\Scripts\python.exe releasectl.py manifest --version 0.1.0
+.\.venv\Scripts\python.exe releasectl.py publish  --version 0.1.0
 ```
 
-`build.ps1` recreates `.venv`, installs `requirements.txt`, and writes a fresh
-`dist\UniTrans Waybill Sorter.exe`.
+`build.ps1` recreates `.venv`, installs `requirements.txt`, regenerates the
+icon, and writes `releases\Unitrans-Portal-<version>.exe` with its SHA-256.
+`publish` creates the git tag and GitHub release and attaches the exe plus the
+manifest.
 
-Python resolution order: `py -3` → `python3` / `python` (skipping the Windows
-Store alias stub) → `%LOCALAPPDATA%\Python\bin\python.exe`. Pin one explicitly
-with `$env:UNITRANS_PYTHON`.
+Test a build before publishing it:
 
-Two things were changed when this project moved out of `Documents\Codex`:
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests   # 21 tests
+.\.venv\Scripts\python.exe tests\smoke_gui.py --screenshot gui.png
+```
 
-- The script previously preferred a **Codex-bundled** Python under
-  `%USERPROFILE%\.cache\codex-runtimes\`, and fell back to the Windows Store
-  `python.exe` stub — which silently opens the Store instead of running. Both are
-  gone; a real interpreter is now required and validated up front.
-- The two generated `.spec` files were removed. They were PyInstaller output
-  (not inputs) and had absolute paths into the retired Codex runtime cache baked
-  in. `build.ps1` regenerates its own.
+The packaged executable can also be exercised without the GUI:
 
-The original 1.0 build used Python 3.12. A rebuild here resolves to Python
-3.14.6 — **re-test before shipping to the client.**
+```powershell
+.\releases\Unitrans-Portal-0.1.0.exe --excel book.xlsx --pdf-folder .\pdfs --make-print-pdf
+```
+
+Releases are built with Python 3.14.6. The original 1.0 build used 3.12, so
+re-test after any change of interpreter.
