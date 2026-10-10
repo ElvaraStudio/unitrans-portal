@@ -174,6 +174,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Show the update-available dialog using a synthetic newer release.",
     )
     parser.add_argument("--language", choices=["en", "zh"], help="Switch language before capturing.")
+    parser.add_argument(
+        "--screen",
+        choices=["selector", "sort", "driver", "unlock"],
+        help="Open a specific screen before capturing.",
+    )
     args = parser.parse_args(argv)
 
     from waybill_sorter import WaybillSorterApp
@@ -219,6 +224,26 @@ def main(argv: list[str] | None = None) -> int:
         app.update()
         print(f"PASS: switched language to {args.language!r} (title now {app.title()!r}).")
 
+    if args.screen and args.screen != "selector":
+        {
+            "sort": app.select_sort_workflow,
+            "driver": app.select_driver_workflow,
+            "unlock": app.select_unlock_workflow,
+        }[args.screen]()
+        app.update_idletasks()
+        app.update()
+        print(f"PASS: opened the {args.screen!r} screen.")
+
+        # A back button must be reachable from every section, otherwise there
+        # is no way out except closing the app.
+        back_text = app.tr("back_to_workflows")
+        found_back = _find_button(app, lambda text: back_text in text)
+        if not found_back:
+            print(f"FAIL: no back button containing {back_text!r} on the {args.screen!r} screen.")
+            app.destroy()
+            return 1
+        print(f"PASS: back button present and visible ({found_back!r}).")
+
     if args.settings:
         if not hasattr(app, "open_settings"):
             print("FAIL: the app has no Settings entry point.")
@@ -240,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         app.update_idletasks()
         app.update()
         print("PASS: update-available dialog rendered for a synthetic newer release.")
+
+    _report_focus_rings(app)
 
     app.deiconify()
     app.lift()
@@ -276,6 +303,52 @@ def main(argv: list[str] | None = None) -> int:
     app.destroy()
     print("PASS: GUI built, rendered, and shut down cleanly.")
     return 0
+
+
+def _find_button(app: tk.Misc, predicate) -> str | None:
+    """Text of the first visible Button satisfying ``predicate``, else None."""
+    match: list[str] = []
+
+    def walk(widget):
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Button):
+                try:
+                    text = str(child.cget("text"))
+                    # winfo_ismapped is false for widgets in a screen that was
+                    # built but never shown.
+                    if child.winfo_ismapped() and predicate(text):
+                        match.append(text)
+                except tk.TclError:
+                    pass
+            walk(child)
+
+    walk(app)
+    return match[0] if match else None
+
+
+def _report_focus_rings(app: tk.Misc) -> None:
+    """Flag buttons whose Tk focus ring would draw as a stray box.
+
+    highlightthickness defaults to a non-zero value in Tk; left unset it shows
+    as a blue box around whichever button takes keyboard focus.
+    """
+    offenders = []
+
+    def walk(widget):
+        for child in widget.winfo_children():
+            if isinstance(child, tk.Button):
+                try:
+                    if int(child.cget("highlightthickness")) != 0:
+                        offenders.append(str(child.cget("text")))
+                except (tk.TclError, ValueError):
+                    pass
+            walk(child)
+
+    walk(app)
+    if offenders:
+        print(f"WARNING: {len(offenders)} button(s) have a non-zero focus ring: {offenders}")
+    else:
+        print("PASS: no button has a focus ring (highlightthickness is 0 everywhere).")
 
 
 def _last_toplevel(app: tk.Misc) -> tk.Misc | None:

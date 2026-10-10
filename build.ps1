@@ -208,12 +208,35 @@ $Hash = Get-FileHash -LiteralPath $ReleaseExe -Algorithm SHA256
 $SizeBytes = (Get-Item -LiteralPath $ReleaseExe).Length
 $SizeMb = [math]::Round($SizeBytes / 1MB, 1)
 
+# ---------------------------------------------------------------------------
+# Drop a copy in the Downloads folder for testing.
+#
+# Publishing to GitHub and then downloading the result just to try a build is a
+# waste of time, so the built exe is left where it is easiest to grab. This
+# copy is NOT the artifact of record - releases\ is - and it is never committed
+# (the whole releases/ binary set is gitignored). Delete it any time.
+# ---------------------------------------------------------------------------
+$DownloadsCopy = $null
+$DownloadsDir = Join-Path $env:USERPROFILE 'Downloads'
+if (Test-Path -LiteralPath $DownloadsDir) {
+    $DownloadsCopy = Join-Path $DownloadsDir "$SafeName-$Version.exe"
+    try {
+        Copy-Item -LiteralPath $ReleaseExe -Destination $DownloadsCopy -Force
+    } catch {
+        Write-Warning "Could not copy to Downloads: $($_.Exception.Message)"
+        $DownloadsCopy = $null
+    }
+}
+
 Write-Host ''
 Write-Host 'Build complete' -ForegroundColor Green
 Write-Host "  product      : $ProductName $Version"
 Write-Host "  publisher    : $Publisher"
 Write-Host "  dist         : $BuiltExe"
 Write-Host "  release      : $ReleaseExe"
+if ($DownloadsCopy) {
+    Write-Host "  for testing  : $DownloadsCopy" -ForegroundColor Cyan
+}
 Write-Host "  size         : $SizeMb MB ($SizeBytes bytes)"
 Write-Host "  sha256       : $($Hash.Hash)"
 Write-Host ''

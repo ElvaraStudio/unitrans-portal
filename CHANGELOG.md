@@ -24,6 +24,48 @@ behaviour can still change between versions.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
 
+## [0.2.1] - 2026-10-10
+
+### Changed
+
+- The app now opens as a **windowed** window on the chosen display rather than
+  filling it. Opening on a second monitor is meant to leave the app waiting
+  there without covering anything on that screen.
+
+### Fixed
+
+- **Switching language no longer resizes or moves the window.** Rebuilding the
+  interface destroyed every widget, which made Tk recompute the window's size
+  from scratch; the maximised state was dropped and, on a multi-monitor desk,
+  Windows then placed the un-maximised window on the *other* screen at a
+  different size. The window geometry and zoom state are now captured before a
+  rebuild and reapplied afterwards.
+- **Removed the stray blue box that appeared on buttons.** Tk's
+  `highlightthickness` defaults to a non-zero value and draws a focus ring
+  around whichever button takes keyboard focus, which made it look like the
+  language switch had changed something. Buttons now set
+  `highlightthickness=0` and `takefocus=0`.
+- Opening on a chosen monitor no longer overflows the screen. The window is
+  placed on the target display and then maximised by Windows, so the frame, the
+  taskbar and display scaling are all handled correctly. Sizing it by hand left
+  the outer edge running past the screen and the bottom under the taskbar.
+- `append_log` no longer raises `AttributeError` when called before a screen
+  with a log panel has been built.
+
+### Added
+
+- A **Back to Main Menu** button, at the top-left of every section. Previously
+  the only way out was a button in the Actions column, styled identically to
+  `Options` and `Clear Log`, which was easy to miss.
+- **Display** section in Settings: choose which monitor the app opens on. The
+  choice is saved and applied at the next start. With one monitor there is
+  nothing to choose and the app stays where it is.
+- `build.ps1` copies the built executable to the Downloads folder for testing,
+  so trying a build no longer means downloading it from GitHub first. This copy
+  is a convenience only - `releases/` remains the artifact of record.
+- `monitors.py` for multi-monitor geometry, with tests covering the
+  single-monitor fallback and negative monitor coordinates.
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

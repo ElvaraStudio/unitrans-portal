@@ -83,6 +83,22 @@ The app shows its own version in the footer and in the Settings window, and
 Windows Explorer ▸ Properties ▸ Details shows the file version of the installed
 executable.
 
+## Window and display
+
+The app opens as a normal resizable window on the display chosen in
+**Settings ▸ Display** (the second screen by default, falling back to the
+primary if there is only one).
+
+It is deliberately **not maximised**: the point of opening on a second monitor
+is that it is waiting there when you look at it, without covering whatever you
+are already working on. Placement uses `SetWindowPos` on the window frame
+because Tk's `geometry()` positions the client area and cannot place a window
+precisely on a secondary display — `winfo_screenwidth` also reports only the
+primary monitor, so Tk alone cannot size a window for any other screen.
+
+Switching language rebuilds the interface but preserves the window's size,
+position and state, so the window never jumps or resizes.
+
 ## Checking for updates
 
 Open **Settings** (top-right of the window) and choose **Check for updates now**.

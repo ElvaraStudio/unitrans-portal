@@ -1,36 +1,38 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.2.0",
-  "display_version": "0.2.0 (Beta)",
+  "version": "0.2.1",
+  "display_version": "0.2.1 (Beta)",
   "published": "2026-10-10",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.0/Unitrans-Portal-0.2.0.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.2.1/Unitrans-Portal-0.2.1.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.1",
   "file": {
-    "name": "Unitrans-Portal-0.2.0.exe",
-    "size": 24418908,
-    "sha256": "b65f86ed8152345e1550dd7e29d1dc904ed99feafa819cbb8d08a0d9df65c65f"
+    "name": "Unitrans-Portal-0.2.1.exe",
+    "size": 24435076,
+    "sha256": "58ab614d672792ffbe8ac1228438a0e2aaf1cd4f93b7675dc67c9081374ba5aa"
   },
   "notes": {
     "en": {
-      "headline": "Settings and update checking",
+      "headline": "Interface fixes",
       "notes": [
-        "New Settings window, reached from the Settings button in the top-right corner. It shows which version you have installed.",
-        "You can now check for updates yourself. The app asks the release server whether a newer version exists, and if there is one it shows you what changed and offers a link to download it.",
-        "Release notes appear in whichever language you are using the app in.",
-        "Update checks never interrupt your work. If there is no internet connection, or the network blocks the release server, the app simply tells you it could not check.",
-        "This version does not check for updates by itself - you start the check from the Settings window."
+        "Switching between English and Chinese no longer resizes the window or moves it to another screen.",
+        "A stray blue box that could appear around a button after clicking has been removed.",
+        "There is now a Back to Main Menu button at the top-left of every section, so you can always get back to the start.",
+        "Settings now has a Display section where you can choose which monitor the app opens on. The choice is remembered and applies the next time you open the app.",
+        "The app no longer extends past the edge of the screen when it opens.",
+        "Update checking from the Settings window works as before."
       ]
     },
     "zh": {
-      "headline": "设置与更新检查",
+      "headline": "界面修正",
       "notes": [
-        "新增“设置”窗口，可通过右上角的“设置”按钮打开，其中会显示当前已安装的版本。",
-        "现在可以手动检查更新。软件会向发布服务器查询是否有新版本；如有，会显示更新内容并提供下载链接。",
-        "更新说明会以您当前使用的界面语言显示。",
-        "检查更新不会中断您的工作。如果没有网络连接，或网络无法访问发布服务器，软件只会提示无法检查。",
-        "此版本不会自动检查更新，需要您在“设置”窗口中手动开始检查。"
+        "在中英文之间切换时，窗口不再改变大小，也不会跳到另一个屏幕。",
+        "修复了点击后按钮周围偶尔出现的蓝色方框。",
+        "每个功能页面的左上角新增“返回主菜单”按钮，随时可以回到起始界面。",
+        "“设置”中新增“显示器”部分，可选择软件在哪个屏幕上打开。该选择会被记住，并在下次打开软件时生效。",
+        "软件打开时不再超出屏幕边缘。",
+        "“设置”窗口中的检查更新功能保持不变。"
       ]
     }
   }

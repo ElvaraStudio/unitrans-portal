@@ -45,6 +45,13 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import settings as app_settings
+from monitors import (
+    MONITOR_DEFAULT,
+    Monitor,
+    apply_startup_placement,
+    list_monitors,
+    placement_for,
+)
 from updater import check_for_update, format_size
 from version import APP_VERSION, display_version, version_label
 
@@ -381,6 +388,49 @@ def import_dependencies_ok() -> None:
             "Missing Python dependency. Install requirements.txt or run the packaged .exe. "
             f"Original error: {IMPORT_ERROR}"
         )
+
+
+def _window_frame_size(widget: tk.Misc) -> tuple[int, int]:
+    """Frame + border size Windows adds around a Tk window's client area.
+
+    ``geometry()`` sets the client area, so sizing a window to fill a screen
+    needs the non-client chrome added on top. Tk does not expose it, and
+    ``winfo_rootx() - winfo_x()`` does not measure it (both are relative to the
+    parent, which for a toplevel is the screen). ``AdjustWindowRectEx`` is the
+    Win32 call that answers this exactly, including any DPI scaling.
+
+    Returns ``(0, 0)`` when the metrics are unavailable, in which case the
+    caller should leave the geometry alone.
+    """
+    try:
+        import ctypes
+        import ctypes.wintypes as wintypes
+
+        widget.update_idletasks()
+        user32 = ctypes.windll.user32
+
+        # AdjustWindowRectEx works in physical pixels for the process DPI
+        # awareness, while Tk's geometry() uses logical pixels. On a scaled
+        # display the two differ, so scale using the window's own DPI.
+        try:
+            dpi = int(user32.GetDpiForWindow(int(widget.winfo_id())))
+        except Exception:
+            dpi = 96
+        scale = (dpi / 96.0) if dpi > 0 else 1.0
+
+        rect = wintypes.RECT(0, 0, 0, 0)
+        # WS_OVERLAPPEDWINDOW: caption, thick frame, minimise/maximise boxes.
+        WS_OVERLAPPEDWINDOW = 0x00CF0000
+        if not user32.AdjustWindowRectEx(ctypes.byref(rect), WS_OVERLAPPEDWINDOW, False, 0):
+            return (0, 0)
+
+        width = int(round((rect.right - rect.left) * scale))
+        height = int(round((rect.bottom - rect.top) * scale))
+        if width <= 0 or height <= 0:
+            return (0, 0)
+        return (width, height)
+    except Exception:
+        return (0, 0)
 
 
 def resource_path(file_name: str) -> Path:
@@ -2070,7 +2120,7 @@ I18N = {
         "workflow_driver_desc": "Read scanned waybill images and fill blank car numbers in Excel.",
         "workflow_unlock": "Unlock PDFs",
         "workflow_unlock_desc": "Remove editable/printing restrictions from PDFs that do not require an open password.",
-        "back_to_workflows": "Change Workflow",
+        "back_to_workflows": "Back to Main Menu",
         "hero_title": "Waybill Sorter",
         "hero_subtitle": "Sort waybills and create one bulk PDF in Excel order.",
         "status_start": "Choose an Excel file when you are ready.",
@@ -2145,6 +2195,12 @@ I18N = {
         "settings_last_checked": "Last checked: {when}",
         "settings_never_checked": "Never checked",
         "settings_close": "Close",
+        "settings_display": "Display",
+        "settings_monitor_hint": "Choose which screen the app opens on. Windows cannot do this for us, so the choice is applied when the app starts.",
+        "settings_monitor_primary": "Primary screen",
+        "settings_monitor_secondary": "Second screen",
+        "settings_monitor_apply": "Applies the next time the app opens.",
+        "settings_monitor_single": "Only one screen was detected, so the app opens there.",
         "update_title": "Update available",
         "update_heading": "Version {version} is available",
         "update_current": "You are running {current}.",
@@ -2211,7 +2267,7 @@ I18N = {
         "workflow_driver_desc": "读取运单扫描图片，并填写 Excel 中空白的车号。",
         "workflow_unlock": "\u89e3\u9501 PDF",
         "workflow_unlock_desc": "\u79fb\u9664\u4e0d\u9700\u6253\u5f00\u5bc6\u7801\u7684 PDF \u7f16\u8f91/\u6253\u5370\u9650\u5236\u3002",
-        "back_to_workflows": "切换工作流程",
+        "back_to_workflows": "返回主菜单",
         "hero_title": "运单排序工具",
         "hero_subtitle": "按照 Excel 顺序整理运单，并生成一个合并 PDF。",
         "status_start": "准备好后请选择 Excel 文件。",
@@ -2286,6 +2342,12 @@ I18N = {
         "settings_last_checked": "上次检查：{when}",
         "settings_never_checked": "从未检查",
         "settings_close": "关闭",
+        "settings_display": "显示器",
+        "settings_monitor_hint": "选择软件在哪个屏幕上打开。Windows 无法自动完成此设置，因此在软件启动时应用。",
+        "settings_monitor_primary": "主屏幕",
+        "settings_monitor_secondary": "第二屏幕",
+        "settings_monitor_apply": "下次打开软件时生效。",
+        "settings_monitor_single": "只检测到一个屏幕，软件将在此屏幕上打开。",
         "update_title": "有可用更新",
         "update_heading": "有新版本 {version} 可用",
         "update_current": "当前版本为 {current}。",
@@ -2428,6 +2490,14 @@ class WaybillSorterApp(tk.Tk):
             disabledforeground="#FFFFFF",
             relief=tk.FLAT,
             bd=0,
+            # highlightthickness is a Tk default of 1-2px and draws the focus
+            # ring. Left unset it shows as a stray blue box around a button
+            # whenever that button takes keyboard focus - which happens on the
+            # first click in a rebuilt window, making it look like the language
+            # switch changed something. takefocus=0 keeps it out of the tab
+            # order so the ring never appears.
+            highlightthickness=0,
+            takefocus=0,
             padx=18 if compact else 22,
             pady=9 if compact else 12,
             font=("Segoe UI", 11 if compact else 12, "bold"),
@@ -2463,8 +2533,37 @@ class WaybillSorterApp(tk.Tk):
             activeforeground="#12355F",
             relief=tk.FLAT,
             bd=0,
+            # See _primary_button: without these a focus ring appears as a blue
+            # box around the button.
+            highlightthickness=0,
+            takefocus=0,
             padx=16,
             pady=9,
+            font=("Segoe UI", 11, "bold"),
+            cursor="hand2",
+        )
+
+    def _back_button(self, parent: tk.Widget) -> tk.Button:
+        """A clearly visible 'back to the main menu' button.
+
+        Deliberately larger and bolder than a secondary button: it was
+        previously styled the same as 'Options' and 'Clear Log' and was easy to
+        miss, which is why it read as missing.
+        """
+        return tk.Button(
+            parent,
+            text=f"\u2190  {self.tr('back_to_workflows')}",
+            command=self.return_to_workflows,
+            bg="#0B5CAD",
+            activebackground="#084A8C",
+            fg="#FFFFFF",
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            bd=0,
+            highlightthickness=0,
+            takefocus=0,
+            padx=20,
+            pady=11,
             font=("Segoe UI", 11, "bold"),
             cursor="hand2",
         )
@@ -2524,17 +2623,33 @@ class WaybillSorterApp(tk.Tk):
             pass
         style.configure("TSpinbox", arrowsize=14)
 
-    def _build_header(self, root: tk.Widget, title: str, subtitle: str) -> None:
+    def _build_header(self, root: tk.Widget, title: str, subtitle: str, back: bool = False) -> None:
         hero = tk.Frame(root, bg="#FFFFFF")
         hero.pack(fill=tk.X)
         hero.columnconfigure(1, weight=1)
+
+        # Inside a workflow the back button takes the leftmost slot, before the
+        # logo, because that is the first place the eye goes when looking for a
+        # way out. On the workflow selector there is nowhere to go back to, so
+        # the slot is unused and the logo keeps its position.
+        logo_column = 0
+        if back:
+            self._back_button(hero).grid(row=0, column=0, sticky="w", padx=(18, 0), pady=10)
+            logo_column = 4
+
         logo_image = self.load_logo_image()
         brand = tk.Label(hero, bg="#FFFFFF", padx=12, pady=6)
         if logo_image is not None:
             brand.configure(image=logo_image)
         else:
             brand.configure(text=self.tr("brand"), fg="#082B52", font=("Segoe UI", 24, "bold"))
-        brand.grid(row=0, column=0, sticky="w", padx=18, pady=10)
+        brand.grid(
+            row=0,
+            column=logo_column,
+            sticky="w",
+            padx=(48 if back else 18, 0),
+            pady=10,
+        )
         title_frame = tk.Frame(hero, bg="#FFFFFF")
         title_frame.grid(row=0, column=1, sticky="ew", pady=12)
         tk.Label(
@@ -2699,7 +2814,7 @@ class WaybillSorterApp(tk.Tk):
 
         root = tk.Frame(self, bg="#E8EDF4")
         root.pack(fill=tk.BOTH, expand=True)
-        self._build_header(root, self.tr("workflow_unlock"), self.tr("workflow_unlock_desc"))
+        self._build_header(root, self.tr("workflow_unlock"), self.tr("workflow_unlock_desc"), back=True)
 
         outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
@@ -2725,7 +2840,6 @@ class WaybillSorterApp(tk.Tk):
         self.unlock_button.pack(fill=tk.X, pady=(0, 8))
         self.unlock_open_output_button = self._primary_button(action_stack, self.tr("open_output"), self.open_unlock_output)
         self.unlock_open_output_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("back_to_workflows"), self.return_to_workflows).pack(fill=tk.X, pady=(0, 8))
         self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
 
         self._build_log_panel(lower)
@@ -2738,7 +2852,7 @@ class WaybillSorterApp(tk.Tk):
 
         root = tk.Frame(self, bg="#E8EDF4")
         root.pack(fill=tk.BOTH, expand=True)
-        self._build_header(root, self.tr("workflow_driver"), self.tr("workflow_driver_desc"))
+        self._build_header(root, self.tr("workflow_driver"), self.tr("workflow_driver_desc"), back=True)
 
         outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
@@ -2775,7 +2889,6 @@ class WaybillSorterApp(tk.Tk):
         self.driver_fill_button.pack(fill=tk.X, pady=(0, 8))
         self.driver_open_output_button = self._primary_button(action_stack, self.tr("open_output"), self.open_driver_output)
         self.driver_open_output_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("back_to_workflows"), self.return_to_workflows).pack(fill=tk.X, pady=(0, 8))
         self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
 
         self._build_log_panel(lower)
@@ -2797,7 +2910,7 @@ class WaybillSorterApp(tk.Tk):
         root = tk.Frame(self, bg="#E8EDF4")
         root.pack(fill=tk.BOTH, expand=True)
 
-        self._build_header(root, self.tr("hero_title"), self.tr("hero_subtitle"))
+        self._build_header(root, self.tr("hero_title"), self.tr("hero_subtitle"), back=True)
 
         outer = tk.Frame(root, bg="#E8EDF4", padx=16, pady=14)
         outer.pack(fill=tk.BOTH, expand=True)
@@ -2846,7 +2959,6 @@ class WaybillSorterApp(tk.Tk):
         self.open_output_button.pack(fill=tk.X, pady=(0, 8))
         self.options_button = self._secondary_button(action_stack, self.tr("options"), self.open_options)
         self.options_button.pack(fill=tk.X, pady=(0, 8))
-        self._secondary_button(action_stack, self.tr("back_to_workflows"), self.return_to_workflows).pack(fill=tk.X, pady=(0, 8))
         self._secondary_button(action_stack, self.tr("clear_log"), self.clear_log).pack(fill=tk.X)
 
         log_shell, log_body = self._card(lower, self.tr("section_log"))
@@ -2887,13 +2999,46 @@ class WaybillSorterApp(tk.Tk):
         self.progress_text.set(text)
 
     def show_maximized(self) -> None:
+        """Open on the configured monitor.
+
+        The window is *not* maximised. It is meant to appear on a screen the
+        user is not currently working on - usually a second monitor - so it
+        opens at a comfortable size, positioned without stealing focus, and
+        waits there. Maximising would cover whatever is already on that screen.
+
+        Placement goes through ``SetWindowPos`` on the window frame because
+        Tk's own ``geometry()`` positions the client area and cannot put a
+        window precisely on a secondary display; ``winfo_screenwidth`` also
+        reports only the primary monitor, so Tk alone cannot size a window for
+        any other screen.
+        """
         try:
-            self.state("zoomed")
-        except tk.TclError:
+            preference = int(self.user_settings.get("startup_monitor", MONITOR_DEFAULT))
+        except (TypeError, ValueError):
+            preference = MONITOR_DEFAULT
+
+        try:
+            monitors = list_monitors()
+        except Exception:
+            monitors = []
+
+        if not monitors:
+            # No monitor information: leave the window where the window manager
+            # put it rather than guessing.
+            return
+
+        # Deferred so the window is mapped before being moved; moving an
+        # unmapped toplevel is ignored on Windows.
+        def place() -> None:
             try:
-                self.attributes("-zoomed", True)
-            except tk.TclError:
+                apply_startup_placement(self, preference, maximise=False, monitors=monitors)
+            except Exception:
                 pass
+
+        try:
+            self.after(80, place)
+        except tk.TclError:
+            pass
 
     def format_pdf_page_check(self, analysis: PdfFolderAnalysis) -> str:
         if not analysis.page_counts:
@@ -2953,8 +3098,20 @@ class WaybillSorterApp(tk.Tk):
         timestamp = timestamp or dt.datetime.now().strftime("%H:%M:%S")
         if record:
             self.log_history.append((timestamp, message))
-        self.log_text.insert(tk.END, f"[{timestamp}] {self.render_log_message(message)}\n")
-        self.log_text.see(tk.END)
+        # The log widget only exists on screens that show a log panel; the
+        # workflow selector does not. Anything logged before then is still kept
+        # in log_history and rendered by render_log_history when the panel
+        # appears.
+        log_text = getattr(self, "log_text", None)
+        if log_text is None:
+            return
+        try:
+            if not log_text.winfo_exists():
+                return
+            log_text.insert(tk.END, f"[{timestamp}] {self.render_log_message(message)}\n")
+            log_text.see(tk.END)
+        except tk.TclError:
+            pass
 
     def render_log_history(self) -> None:
         if not hasattr(self, "log_text"):
@@ -3065,6 +3222,50 @@ class WaybillSorterApp(tk.Tk):
 
         ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
 
+        # --- display -------------------------------------------------------
+        tk.Label(
+            body, text=self.tr("settings_display"), bg="#FFFFFF", fg="#12355F",
+            font=("Segoe UI", 12, "bold"), anchor="w",
+        ).pack(fill=tk.X)
+
+        monitors = list_monitors()
+        if len(monitors) > 1:
+            tk.Label(
+                body, text=self.tr("settings_monitor_hint"), bg="#FFFFFF", fg="#4B5F7A",
+                font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
+            ).pack(fill=tk.X, pady=(8, 6))
+
+            monitor_var = tk.IntVar(
+                value=int(self.user_settings.get("startup_monitor", MONITOR_DEFAULT))
+            )
+            for monitor in monitors:
+                tag = self.tr("settings_monitor_primary") if monitor.primary else self.tr("settings_monitor_secondary")
+                tk.Radiobutton(
+                    body,
+                    text=f"{tag}  \u2014  {monitor.describe()}",
+                    variable=monitor_var,
+                    value=monitor.index,
+                    command=lambda: self._set_startup_monitor(monitor_var.get()),
+                    bg="#FFFFFF",
+                    activebackground="#FFFFFF",
+                    fg="#12355F",
+                    font=("Segoe UI", 10),
+                    anchor="w",
+                    selectcolor="#FFFFFF",
+                    highlightthickness=0,
+                ).pack(fill=tk.X)
+            tk.Label(
+                body, text=self.tr("settings_monitor_apply"), bg="#FFFFFF", fg="#6B7280",
+                font=("Segoe UI", 9), anchor="w",
+            ).pack(fill=tk.X, pady=(4, 0))
+        else:
+            tk.Label(
+                body, text=self.tr("settings_monitor_single"), bg="#FFFFFF", fg="#4B5F7A",
+                font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
+            ).pack(fill=tk.X, pady=(8, 0))
+
+        ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
+
         tk.Label(
             body, text=self.tr("settings_updates"), bg="#FFFFFF", fg="#12355F",
             font=("Segoe UI", 12, "bold"), anchor="w",
@@ -3132,6 +3333,10 @@ class WaybillSorterApp(tk.Tk):
         x = self.winfo_rootx() + max(40, (self.winfo_width() - window.winfo_width()) // 2)
         y = self.winfo_rooty() + max(40, (self.winfo_height() - window.winfo_height()) // 3)
         window.geometry(f"+{x}+{y}")
+
+    def _set_startup_monitor(self, index: int) -> None:
+        """Persist the chosen startup display."""
+        self.user_settings = app_settings.update_settings(startup_monitor=int(index))
 
     def _last_checked_text(self) -> str:
         """'Last checked: ...' or 'Never checked'."""
@@ -3349,6 +3554,13 @@ class WaybillSorterApp(tk.Tk):
                 pass
             self.settings_window = None
         workflow = self.current_workflow
+
+        # Destroying every child makes Tk recompute the window's size from
+        # scratch. Without saving the geometry first the window is resized and,
+        # on a multi-monitor desk, jumps to wherever Windows last put a
+        # same-sized window - which is why switching language moved the app to
+        # the other screen. Capture, rebuild, restore.
+        saved = self._window_geometry()
         self._clear_window()
         if workflow == "sort":
             self._build_ui()
@@ -3358,8 +3570,48 @@ class WaybillSorterApp(tk.Tk):
             self._build_unlock_ui()
         else:
             self._build_workflow_selector()
+        self._restore_window_geometry(saved)
         if workflow == "sort" and self.pdf_folder.get():
             self.update_pdf_folder_analysis(Path(self.pdf_folder.get()), log=False)
+
+    def _window_geometry(self) -> str:
+        """Geometry to reapply after a rebuild.
+
+        Returns the literal 'zoomed' when the window is maximised, otherwise a
+        ``WxH+X+Y`` string. While zoomed, reapplying an explicit size would
+        un-maximise the window, so the two cases are kept distinct.
+        """
+        try:
+            if self.state() == "zoomed":
+                return "zoomed"
+            return str(self.wm_geometry())
+        except tk.TclError:
+            return ""
+
+    def _restore_window_geometry(self, saved: str) -> None:
+        """Reapply geometry captured by ``_window_geometry``.
+
+        Applied immediately and then once more on the next idle cycle: the
+        rebuild completes after the current callback returns, and Tk can resize
+        the window again at that point, which would otherwise undo this.
+        """
+        if not saved:
+            return
+
+        def apply() -> None:
+            try:
+                if saved == "zoomed":
+                    self.state("zoomed")
+                else:
+                    self.geometry(saved)
+            except tk.TclError:
+                pass
+
+        apply()
+        try:
+            self.after_idle(apply)
+        except tk.TclError:
+            pass
 
     def set_status(self, status_key: str) -> None:
         self.status_key = status_key

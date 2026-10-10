@@ -3,6 +3,33 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.2.1",
+      "date": "2026-10-10",
+      "kind": "beta",
+      "en": {
+        "headline": "Interface fixes",
+        "notes": [
+          "Switching between English and Chinese no longer resizes the window or moves it to another screen.",
+          "A stray blue box that could appear around a button after clicking has been removed.",
+          "There is now a Back to Main Menu button at the top-left of every section, so you can always get back to the start.",
+          "Settings now has a Display section where you can choose which monitor the app opens on. The choice is remembered and applies the next time you open the app.",
+          "The app no longer extends past the edge of the screen when it opens.",
+          "Update checking from the Settings window works as before."
+        ]
+      },
+      "zh": {
+        "headline": "界面修正",
+        "notes": [
+          "在中英文之间切换时，窗口不再改变大小，也不会跳到另一个屏幕。",
+          "修复了点击后按钮周围偶尔出现的蓝色方框。",
+          "每个功能页面的左上角新增\u201c返回主菜单\u201d按钮，随时可以回到起始界面。",
+          "\u201c设置\u201d中新增\u201c显示器\u201d部分，可选择软件在哪个屏幕上打开。该选择会被记住，并在下次打开软件时生效。",
+          "软件打开时不再超出屏幕边缘。",
+          "\u201c设置\u201d窗口中的检查更新功能保持不变。"
+        ]
+      }
+    },
+    {
       "version": "0.2.0",
       "date": "2026-10-10",
       "kind": "beta",
