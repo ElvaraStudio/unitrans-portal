@@ -19,7 +19,7 @@ Everything else here is a build artifact and can be deleted safely; run
 
 | Version | Artifact | Built | Size | SHA-256 |
 |---|---|---|---|---|
-| 0.2.0 | `Unitrans-Portal-0.2.0.exe` | 2026-10-10 | 23.3 MB | _(see `manifest.json`)_ |
+| 0.2.1 | `Unitrans-Portal-0.2.1.exe` | 2026-10-10 | 23.3 MB | _(see `manifest.json`)_ |
 
 The hash of record is always the one in `manifest.json`, so there is only one
 place to check. `releasectl.py` refuses to publish if the artifact has changed
@@ -29,25 +29,29 @@ since the manifest was generated.
 
 | Version | Date | Notes |
 |---|---|---|
-| 0.2.0 | 2026-10-10 | Settings window with a manual update check. Version numbering corrected from 0.1.1: this release adds a feature, and it is what allows the 0.1.0 installs to see updates. |
+| 0.2.1 | 2026-10-10 | Window no longer resizes or moves when switching language; focus-ring box removed; Back to Main Menu button; monitor selection in Settings. Opens windowed on the chosen display. |
+| 0.2.0 | 2026-10-10 | Settings window with a manual update check. |
 | 0.1.0 | 2026-10-10 | First beta. Versioning restarted from the old `1.0` label; app renamed to Unitrans Portal. |
 
 ## Retired builds
 
-Three pre-0.2.0 executables have been removed:
+Executables replaced by later versions, listed so it is clear they were removed
+deliberately. All remain downloadable from their own release pages.
 
 | File | Built | Why it was removed |
 |---|---|---|
 | `UniTrans Waybill Sorter 1.0.exe` | 2026-06-15 08:43 | Predated the current source by an hour; the source revision it came from no longer exists and it cannot be rebuilt. |
 | `UniTrans Waybill Sorter.exe` | 2026-06-15 09:42 | Superseded by the numbered releases. Kept no version metadata, so it could not be identified from Explorer. |
-| `Unitrans-Portal-0.1.0.exe` | 2026-10-10 | Superseded by 0.2.0. Still downloadable from its release page. |
+| `Unitrans-Portal-0.1.0.exe` | 2026-10-10 | Superseded by 0.2.0. |
+| `Unitrans-Portal-0.2.0.exe` | 2026-10-10 | Superseded by 0.2.1. |
 
 The old `UniTrans-Waybill-Sorter-transfer-20260615.zip` hand-off bundle had
 already been deleted before this cleanup; it contained the same executables plus
 source that is now in git.
 
 `build.ps1` retires superseded artifacts automatically, so this folder always
-describes exactly one build.
+describes exactly one build, and drops a copy in the Downloads folder for
+testing.
 
 ## Rebuilding and publishing
 
