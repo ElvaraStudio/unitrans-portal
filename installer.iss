@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.4.1"
+  #define AppVersion "0.4.3"
 #endif
 
 #define AppName "Unitrans Portal"

@@ -3,6 +3,48 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.4.3",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Seamless waybill sorter switching",
+        "notes": [
+          "Language and theme changes now refresh the Waybill Sorter controls in place, without closing or reopening the app.",
+          "Header controls and translated statistic labels keep stable sizes when switching between English and Chinese.",
+          "Version advanced to 0.4.3 for the in-app update checker."
+        ]
+      },
+      "zh": {
+        "headline": "运单排序工具无缝切换",
+        "notes": [
+          "切换语言或主题时，现在会直接更新运单排序工具中的控件，不再关闭或重新打开应用。",
+          "在英文和中文之间切换时，页眉控件和统计标签会保持稳定尺寸。",
+          "版本已更新至 0.4.3，供应用内更新检查器使用。"
+        ]
+      }
+    },
+    {
+      "version": "0.4.2",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Fixed-size language controls",
+        "notes": [
+          "Language and theme changes now update the existing screen in place, without hiding or recreating the app window.",
+          "The Language, theme, and Settings controls keep fixed pixel sizes when switching between English and Chinese.",
+          "Version advanced to 0.4.2 for the in-app update checker."
+        ]
+      },
+      "zh": {
+        "headline": "固定语言切换控件尺寸",
+        "notes": [
+          "切换语言或主题时，现在会直接更新现有界面，不再隐藏或重建应用窗口。",
+          "在英文和中文之间切换时，语言、主题和设置控件会保持固定像素尺寸。",
+          "版本已更新至 0.4.2，供应用内更新检查器使用。"
+        ]
+      }
+    },
+    {
       "version": "0.4.1",
       "date": "2026-10-12",
       "kind": "beta",

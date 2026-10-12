@@ -19,7 +19,9 @@ Everything else here is a build artifact and can be deleted safely; run
 
 | Version | Artifact | Built | Size | SHA-256 |
 |---|---|---|---|---|
-| 0.4.1 | `Unitrans-Portal-0.4.1.exe` and `Unitrans-Portal-0.4.1-Setup.exe` | 2026-10-12 | Built locally; see build output for sizes and hashes. |
+| 0.4.3 | `Unitrans-Portal-0.4.3.exe` and `Unitrans-Portal-0.4.3-Setup.exe` | 2026-10-12 | 27.1 MB portable; 28.5 MB installer. Portable SHA-256: `acb78d8a71e5866003b09982cce19879f3739f1685698ff775d6ae5bb8fd3d4a`. Installer SHA-256: `1f40a5d362e33ff65a9bec864b86c3ff35eaeb523b2f8805f8e17f3dc950712b`. |
+| 0.4.2 | `Unitrans-Portal-0.4.2.exe` and `Unitrans-Portal-0.4.2-Setup.exe` | 2026-10-12 | Superseded by 0.4.3. |
+| 0.4.1 | `Unitrans-Portal-0.4.1.exe` and `Unitrans-Portal-0.4.1-Setup.exe` | 2026-10-12 | Published on GitHub. |
 
 The hash of record is always the one in `manifest.json`, so there is only one
 place to check. `releasectl.py` refuses to publish if the artifact has changed
@@ -29,6 +31,8 @@ since the manifest was generated.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.3 | 2026-10-12 | Seamless waybill sorter language/theme switching with stable control sizes. |
+| 0.4.2 | 2026-10-12 | Language and theme changes refresh in place; controls keep fixed sizes. |
 | 0.4.1 | 2026-10-12 | Smooth language/theme switching and fixed control sizes; includes PDF and Excel unlocking. |
 | 0.4.0 | 2026-10-12 | Unlock PDFs and Excel workbooks; installer for sharing with colleagues. |
 | 0.3.0 | 2026-10-10 | Dark mode and theme improvements. |

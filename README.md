@@ -5,7 +5,7 @@ PDF waybills into the same order as the Excel workbook, creates a single bulk
 PDF for printing, fills blank driver numbers from scanned waybill images, and
 removes protection from PDFs and Excel workbooks.
 
-**Version 0.4.1 (Beta)** — publisher Elvara Studio.
+**Version 0.4.3 (Beta)** — publisher Elvara Studio.
 
 > **Beta:** the version is `0.x.y`, which means the interface and behaviour can
 > still change between releases. Version numbering was restarted at 0.1.0; the
@@ -75,6 +75,8 @@ skipped and listed in the report.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.3 | 2026-10-12 | Seamless waybill sorter language/theme switching with stable control sizes. |
+| 0.4.2 | 2026-10-12 | Language and theme changes refresh in place; controls keep fixed sizes. |
 | 0.4.1 | 2026-10-12 | Smooth language/theme switching and fixed control sizes; includes PDF and Excel unlocking. |
 | 0.4.0 | 2026-10-12 | Unlock PDFs and Excel workbooks; accept file selections or folders; add a Windows installer. |
 | 0.3.0 | 2026-10-10 | Dark mode and theme improvements. |
@@ -103,8 +105,8 @@ because Tk's `geometry()` positions the client area and cannot place a window
 precisely on a secondary display — `winfo_screenwidth` also reports only the
 primary monitor, so Tk alone cannot size a window for any other screen.
 
-Switching language rebuilds the interface but preserves the window's size,
-position and state, so the window never jumps or resizes.
+Switching language and theme updates the existing interface in place. The app
+stays open and controls keep their size and position throughout the change.
 
 ## Checking for updates
 
@@ -122,7 +124,7 @@ implemented yet.
 From a terminal, the same check is available without the GUI:
 
 ```powershell
-.\releases\Unitrans-Portal-0.4.1.exe --check-updates
+.\releases\Unitrans-Portal-0.4.3.exe --check-updates
 ```
 
 Exit codes: `0` up to date, `2` update available, `1` the check failed. Being

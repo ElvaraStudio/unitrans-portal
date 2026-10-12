@@ -23,6 +23,34 @@ behaviour can still change between versions.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
 
+## [0.4.3] - 2026-10-12
+
+### Fixed
+
+- Waybill Sorter language and theme switching now refreshes existing controls
+  consistently, without closing/reopening the window or briefly changing
+  control sizes.
+- The Language, theme, and Settings controls keep stable dimensions in both
+  languages; translated statistic labels also reserve enough width for either
+  language.
+
+### Changed
+
+- Version advanced to 0.4.3 so the in-app update checker can find this build.
+
+## [0.4.2] - 2026-10-12
+
+### Fixed
+
+- Language and theme changes now update existing widgets in place. The app no
+  longer disappears, closes, or reopens during a switch.
+- Header control wrappers now disable pack propagation, so translated labels
+  cannot resize the Language, theme, or Settings controls during a switch.
+
+### Changed
+
+- Version advanced to 0.4.2 for the in-app update checker.
+
 ## [0.4.1] - 2026-10-12
 
 ### Fixed
@@ -258,7 +286,9 @@ First beta release.
   permissions-style encryption.
 - English and Chinese interface.
 
-[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.3
+[0.4.2]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.2
 [0.4.1]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.1
 [0.4.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.0
 [0.2.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0

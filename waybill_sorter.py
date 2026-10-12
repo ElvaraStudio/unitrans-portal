@@ -63,7 +63,7 @@ from version import APP_VERSION, display_version, version_label
 # ---------------------------------------------------------------------------
 # Colour tokens. Read from theme.py at startup and refreshed whenever the user
 # switches between light and dark, so no widget needs to know which scheme is
-# in use. Reassigning these and rebuilding the window is the whole of a theme
+# in use. Reassigning these and recolouring existing widgets applies a theme
 # change - see apply_theme() and WaybillSorterApp.toggle_theme().
 # ---------------------------------------------------------------------------
 def _load_colour_tokens() -> dict[str, str]:
@@ -2977,12 +2977,17 @@ class WaybillSorterApp(tk.Tk):
         label_font = tkfont.Font(root=self, font=("Segoe UI", 11, "bold"))
         width = max((label_font.measure(label) for label in variants), default=0) + 48
         shell = tk.Frame(parent, bg=SURFACE, width=width, height=44)
-        shell.grid_propagate(False)
+        # The button is packed into this frame, so pack propagation is the
+        # setting that matters here. grid_propagate(False) leaves the packer
+        # free to resize the shell to the translated button's requested size.
+        shell.pack_propagate(False)
         button = (
             self._theme_button(shell)
             if theme_button
             else self._secondary_button(shell, text, command)
         )
+        if theme_button:
+            self.theme_button = button
         button.configure(width=0)
         button.pack(fill=tk.BOTH, expand=True)
         return shell
@@ -3061,8 +3066,37 @@ class WaybillSorterApp(tk.Tk):
         entry.grid(row=0, column=1, sticky="ew", ipady=12)
         parent.columnconfigure(1, weight=1)
 
-    def _stat(self, parent: tk.Widget, row: int, label: str, variable: tk.StringVar) -> None:
-        tk.Label(parent, text=label, bg=SURFACE, fg=TEXT_LABEL, font=("Segoe UI", 10)).grid(
+    def _stat(
+        self,
+        parent: tk.Widget,
+        row: int,
+        label: str,
+        variable: tk.StringVar,
+        label_key: str | None = None,
+    ) -> None:
+        variants = [
+            str(language[label_key])
+            for language in I18N.values()
+            if label_key is not None and label_key in language
+        ] or [label]
+        try:
+            from tkinter import font as tkfont
+
+            label_font = tkfont.Font(root=self, font=("Segoe UI", 10))
+            widest = max(label_font.measure(text) for text in variants)
+            char_width = max(1, label_font.measure("0"))
+            stable_width = (widest + char_width - 1) // char_width
+        except Exception:
+            stable_width = 0
+        tk.Label(
+            parent,
+            text=label,
+            bg=SURFACE,
+            fg=TEXT_LABEL,
+            font=("Segoe UI", 10),
+            width=stable_width,
+            anchor="w",
+        ).grid(
             row=row,
             column=0,
             sticky="w",
@@ -3403,7 +3437,7 @@ class WaybillSorterApp(tk.Tk):
             password_row, textvariable=self.unlock_password, show="*",
             bg=BG_LIST, fg=TEXT_ENTRY, relief=tk.FLAT, font=("Segoe UI", 11),
         ).pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=8)
-        self._stat(folder_body, 2, self.tr("unlock_files_count"), self.unlock_pdf_count)
+        self._stat(folder_body, 2, self.tr("unlock_files_count"), self.unlock_pdf_count, "unlock_files_count")
 
         lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
@@ -3467,8 +3501,8 @@ class WaybillSorterApp(tk.Tk):
             excel_body, self.tr("choose_excel"), self.choose_driver_excel,
             self.driver_excel_path, label_key="choose_excel",
         )
-        self._stat(excel_body, 1, self.tr("container_rows"), self.driver_row_count)
-        self._stat(excel_body, 2, self.tr("blank_car_numbers"), self.driver_blank_count)
+        self._stat(excel_body, 1, self.tr("container_rows"), self.driver_row_count, "container_rows")
+        self._stat(excel_body, 2, self.tr("blank_car_numbers"), self.driver_blank_count, "blank_car_numbers")
 
         image_shell, image_body = self._card(top_grid, self.tr("section_driver_images"))
         image_shell.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
@@ -3476,7 +3510,7 @@ class WaybillSorterApp(tk.Tk):
             image_body, self.tr("choose_images"), self.choose_driver_image_folder,
             self.driver_image_folder, label_key="choose_images",
         )
-        self._stat(image_body, 1, self.tr("driver_images"), self.driver_image_count)
+        self._stat(image_body, 1, self.tr("driver_images"), self.driver_image_count, "driver_images")
 
         lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
@@ -3549,8 +3583,8 @@ class WaybillSorterApp(tk.Tk):
             excel_body, self.tr("choose_excel"), self.choose_excel,
             self.excel_path, label_key="choose_excel",
         )
-        self._stat(excel_body, 1, self.tr("copy_amount"), self.copy_amount)
-        self._stat(excel_body, 2, self.tr("container_rows"), self.container_count)
+        self._stat(excel_body, 1, self.tr("copy_amount"), self.copy_amount, "copy_amount")
+        self._stat(excel_body, 2, self.tr("container_rows"), self.container_count, "container_rows")
         # Sits below the two stat rows, in column 0 - the same column as the
         # "Choose Excel" picker above it, so the two should end at the same x
         # position. Equal width in Tk's units is not enough to guarantee that:
@@ -3601,8 +3635,8 @@ class WaybillSorterApp(tk.Tk):
             pdf_body, self.tr("choose_folder"), self.choose_pdf_folder,
             self.pdf_folder, label_key="choose_folder",
         )
-        self._stat(pdf_body, 1, self.tr("pdf_files"), self.pdf_count)
-        self._stat(pdf_body, 2, self.tr("pdf_page_check"), self.pdf_page_check)
+        self._stat(pdf_body, 1, self.tr("pdf_files"), self.pdf_count, "pdf_files")
+        self._stat(pdf_body, 2, self.tr("pdf_page_check"), self.pdf_page_check, "pdf_page_check")
 
         lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
@@ -4072,10 +4106,11 @@ class WaybillSorterApp(tk.Tk):
         """Apply a specific scheme, as chosen in Settings."""
         if name == theme.active():
             return
+        old_tokens = _load_colour_tokens()
         self.user_settings = app_settings.update_settings(theme=name)
         apply_theme(name)
         self.configure(bg=BG_WINDOW)
-        self._rebuild_current_screen()
+        self._refresh_current_screen(old_tokens=old_tokens)
 
     def _set_startup_monitor(self, index: int) -> None:
         """Persist the chosen startup display."""
@@ -4277,101 +4312,244 @@ class WaybillSorterApp(tk.Tk):
             self.log_text.delete("1.0", tk.END)
 
     def toggle_language(self) -> None:
+        old_language = self.language.get()
         self.language.set("zh" if self.language.get() == "en" else "en")
         self.title(self.tr("window_title"))
         self.status_text.set(self.tr(self.status_key))
-        self._rebuild_current_screen()
+        self._refresh_current_screen(old_language=old_language)
 
     def toggle_theme(self) -> None:
         """Switch between the light and dark colour schemes.
 
-        The setting is saved immediately so it survives a restart, and the
-        window is rebuilt in place - the colours are read from the token
-        constants when widgets are created, so recreating them is what applies
-        the new scheme. The window keeps its size and position, the same as a
-        language switch.
+        The setting is saved immediately so it survives a restart. Existing
+        widgets are recoloured in place, keeping the window continuously open.
         """
         new_scheme = LIGHT if theme.active() == DARK else DARK
+        old_tokens = _load_colour_tokens()
         self.user_settings = app_settings.update_settings(theme=new_scheme)
         apply_theme(new_scheme)
         self.configure(bg=BG_WINDOW)
         self.status_text.set(self.tr(self.status_key))
-        self._rebuild_current_screen()
+        self._refresh_current_screen(old_tokens=old_tokens)
 
-    def _rebuild_current_screen(self) -> None:
-        """Rebuild the current screen after a language or theme change.
+    def _refresh_current_screen(
+        self,
+        old_language: str | None = None,
+        old_tokens: dict[str, str] | None = None,
+    ) -> None:
+        """Refresh existing widgets in place after a language or theme change.
 
-        Both kinds of change work the same way: colours and strings are read
-        from module-level state as widgets are created, so the window is torn
-        down and rebuilt. Two things must be handled explicitly.
+        Keeping the existing widget tree avoids a close/reopen effect, preserves
+        file selections and dialog state, and leaves every control in place.
         """
-        settings_was_open = self._button_exists("settings_window")
-        # Open dialogs are rebuilt in the new language or colours when reopened,
-        # so close them rather than leaving stale ones behind. The update-check
-        # token is bumped so a result arriving for a destroyed window is
-        # discarded instead of being written into it.
-        for attribute in ("options_window", "settings_window"):
-            window = getattr(self, attribute, None)
-            if window is not None:
+        geometry = self._window_geometry()
+        old_language = old_language or self.language.get()
+        if old_tokens is not None:
+            new_tokens = _load_colour_tokens()
+            colour_map: dict[tuple[int, int, int], dict[str, str]] = {}
+            for name, previous in old_tokens.items():
+                current = new_tokens.get(name)
+                if current is None or previous == current:
+                    continue
                 try:
-                    if window.winfo_exists():
-                        window.destroy()
+                    # Tk normalizes some colors returned by cget (case and
+                    # channel precision vary by widget/platform). Keep every
+                    # token for an RGB value: palettes intentionally reuse
+                    # colors (for example SURFACE and ON_ACCENT are both
+                    # white in light mode), but those roles may map to
+                    # different colors in the other scheme.
+                    colour_map.setdefault(self.winfo_rgb(previous), {})[name] = current
                 except tk.TclError:
-                    pass
-                setattr(self, attribute, None)
-        self.update_check_token += 1
+                    continue
+        else:
+            colour_map = {}
 
-        workflow = self.current_workflow
+        exact_text = {
+            str(previous): str(current)
+            for key, previous in I18N[old_language].items()
+            if (current := I18N[self.language.get()].get(key)) is not None
+        }
+        old_messages = I18N[old_language]
+        new_messages = I18N[self.language.get()]
+        colour_options = (
+            "background", "foreground", "activebackground", "activeforeground",
+            "disabledforeground", "highlightbackground", "highlightcolor",
+            "insertbackground", "readonlybackground", "selectbackground",
+            "selectforeground", "troughcolor",
+        )
+        colour_roles = {
+            "background": {
+                "BG_WINDOW", "BG_PANEL", "BG_LIST", "BG_WARNING", "SURFACE",
+                "ACCENT", "ACCENT_HOVER", "ACCENT_DISABLED", "ACCENT_SOFT",
+                "ACCENT_SOFT_HOVER", "BORDER", "DIVIDER", "BORDER_WARNING",
+                "SCROLLBAR", "SCROLLBAR_TROUGH", "STATE_SUCCESS", "STATE_ERROR",
+                "STATE_WARNING",
+            },
+            "foreground": {
+                "ON_ACCENT", "ACCENT_TEXT", "TEXT", "TEXT_STRONG", "TEXT_HEADING",
+                "TEXT_MUTED", "TEXT_FAINT", "TEXT_LABEL", "TEXT_ENTRY",
+                "STATE_SUCCESS", "STATE_ERROR", "STATE_WARNING",
+            },
+            "activebackground": {"ACCENT_HOVER", "ACCENT_SOFT_HOVER", "ACCENT_DISABLED"},
+            "activeforeground": {"ON_ACCENT", "TEXT_HEADING"},
+            "disabledforeground": {"ON_ACCENT"},
+            "highlightbackground": {"BG_WINDOW", "BORDER", "BORDER_WARNING"},
+            "highlightcolor": {"ACCENT"},
+            "insertbackground": {"TEXT_ENTRY"},
+            "readonlybackground": {"BG_LIST"},
+            "selectbackground": {"ACCENT", "ACCENT_SOFT"},
+            "selectforeground": {"TEXT", "ON_ACCENT"},
+            "troughcolor": {"SCROLLBAR_TROUGH"},
+        }
 
-        # Destroying every child makes Tk recompute the window's size from
-        # scratch. Without saving the geometry first the window is resized and,
-        # on a multi-monitor desk, jumps to wherever Windows last put a
-        # same-sized window - which is why switching language moved the app to
-        # the other screen. Capture, rebuild, restore.
-        saved = self._window_geometry()
-        alpha: float | None = None
-        withdrawn = False
-        try:
-            alpha = float(self.attributes("-alpha"))
-            self.attributes("-alpha", 0.0)
-        except (tk.TclError, TypeError, ValueError):
-            alpha = None
+        def template_translation(text: str) -> str | None:
+            """Translate a formatted I18N string, including repeated fields."""
+            for key, template in old_messages.items():
+                if not isinstance(template, str) or "{" not in template:
+                    continue
+                pieces: list[str] = []
+                field_groups: dict[str, str] = {}
+                cursor = 0
+                for index, field_match in enumerate(re.finditer(r"\{([^{}]+)\}", template)):
+                    pieces.append(re.escape(template[cursor:field_match.start()]))
+                    field = field_match.group(1)
+                    group = field_groups.get(field)
+                    if group is None:
+                        group = f"value_{len(field_groups)}"
+                        field_groups[field] = group
+                        pieces.append(f"(?P<{group}>.+?)")
+                    else:
+                        # Repeated placeholders (for example {matched}/{matched})
+                        # must refer to the same captured value. Re-declaring
+                        # the same named group raises re.PatternError and used
+                        # to abort the entire widget refresh partway through.
+                        pieces.append(f"(?P={group})")
+                    cursor = field_match.end()
+                pieces.append(re.escape(template[cursor:]))
+                try:
+                    match = re.fullmatch("".join(pieces), text, flags=re.DOTALL)
+                except re.error:
+                    continue
+                if match is None:
+                    continue
+                values = {field: match.group(group) for field, group in field_groups.items()}
+                try:
+                    return str(new_messages.get(key, template)).format(**values)
+                except (KeyError, IndexError, ValueError):
+                    continue
+            return None
+
+        def colour_replacement(widget: tk.Misc, option: str, value: str) -> str | None:
             try:
-                self.withdraw()
-                withdrawn = True
+                candidates = colour_map.get(self.winfo_rgb(value), {})
+            except tk.TclError:
+                return None
+            role_names = colour_roles.get(option, set())
+            matches = {name: replacement for name, replacement in candidates.items() if name in role_names}
+            if not matches:
+                return None
+            # In dark mode TEXT_HEADING and TEXT_ENTRY intentionally share an
+            # RGB value. Entries still need their input-text color; all other
+            # widgets using that value are headings.
+            if option == "foreground" and widget.winfo_class() == "Entry" and "TEXT_ENTRY" in matches:
+                return matches["TEXT_ENTRY"]
+            preferred = next(iter(matches))
+            return matches[preferred]
+
+        def translate_text(text: str) -> str | None:
+            translated = exact_text.get(text)
+            if translated is None and text.startswith("\u2190  "):
+                translated = "\u2190  " + exact_text.get(text[3:], text[3:])
+            if translated is None:
+                # Translate strings containing values substituted into a
+                # localized template, such as a page-count summary.
+                translated = template_translation(text)
+            return translated
+
+        def refresh_tree(widget: tk.Misc) -> None:
+            try:
+                children = widget.winfo_children()
+            except tk.TclError:
+                return
+            # Recurse independently of a widget's supported options: one
+            # unusual native/ttk option must not prevent its descendants from
+            # receiving their text or theme refresh.
+            for child in children:
+                refresh_tree(child)
+            try:
+                keys = set(widget.keys())
+            except tk.TclError:
+                return
+            changes: dict[str, str] = {}
+            try:
+                if "text" in keys:
+                    text = str(widget.cget("text"))
+                    translated = translate_text(text)
+                    if translated is not None and translated != text:
+                        changes["text"] = translated
+                if "textvariable" in keys and widget.winfo_class() in {"Label", "TLabel", "Message"}:
+                    variable_name = str(widget.cget("textvariable"))
+                    if variable_name:
+                        try:
+                            value = str(self.getvar(variable_name))
+                            translated = translate_text(value)
+                            if translated is not None and translated != value:
+                                self.setvar(variable_name, translated)
+                        except tk.TclError:
+                            pass
+                for option in colour_options:
+                    if option in keys:
+                        value = str(widget.cget(option))
+                        replacement = colour_replacement(widget, option, value)
+                        if replacement:
+                            changes[option] = replacement
+                if changes:
+                    try:
+                        widget.configure(**changes)
+                    except tk.TclError:
+                        # Apply supported options individually if one widget
+                        # rejects a combined option update.
+                        for option, value in changes.items():
+                            try:
+                                widget.configure(**{option: value})
+                            except tk.TclError:
+                                pass
+            except (tk.TclError, TypeError):
+                pass
+
+        self._configure_base_style()
+        self.title(self.tr("window_title"))
+        for child in self.winfo_children():
+            refresh_tree(child)
+        for attribute, title_key in (("settings_window", "settings_title"), ("options_window", "options_title")):
+            dialog = getattr(self, attribute, None)
+            try:
+                if dialog is not None and dialog.winfo_exists():
+                    dialog.title(self.tr(title_key))
+                    refresh_tree(dialog)
             except tk.TclError:
                 pass
-        try:
-            self._clear_window()
-            if workflow == "sort":
-                self._build_ui()
-            elif workflow == "driver":
-                self._build_driver_ui()
-            elif workflow == "unlock":
-                self._build_unlock_ui()
-            else:
-                self._build_workflow_selector()
-            self._restore_window_geometry(saved)
-            self.update_idletasks()
-            if settings_was_open:
-                self.open_settings()
-                self.update_idletasks()
-        finally:
-            if alpha is not None:
-                try:
-                    self.attributes("-alpha", alpha)
-                except tk.TclError:
-                    pass
-            elif withdrawn:
-                try:
-                    self.deiconify()
-                except tk.TclError:
-                    pass
-        if workflow == "sort" and self.pdf_folder.get():
-            self.update_pdf_folder_analysis(Path(self.pdf_folder.get()), log=False)
+        # Tk's themed button is recreated by neither operation; update its
+        # switching label explicitly, while the stable header shell fixes its
+        # geometry in both languages.
+        theme_button = getattr(self, "theme_button", None)
+        if theme_button is not None:
+            try:
+                label = self.tr("theme_to_light") if theme.active() == DARK else self.tr("theme_to_dark")
+                icon = "\u2600" if theme.active() == DARK else "\u263d"
+                theme_button.configure(text=f"{icon}  {label}")
+            except tk.TclError:
+                pass
+        if (old_tokens is not None or old_language != self.language.get()) and hasattr(self, "log_text"):
+            try:
+                self.render_log_history()
+            except tk.TclError:
+                pass
+        self.update_idletasks()
+        self._restore_window_geometry(geometry)
 
     def _window_geometry(self) -> str:
-        """Geometry to reapply after a rebuild.
+        """Capture the current window geometry.
 
         Returns the literal 'zoomed' when the window is maximised, otherwise a
         ``WxH+X+Y`` string. While zoomed, reapplying an explicit size would
@@ -4387,9 +4565,8 @@ class WaybillSorterApp(tk.Tk):
     def _restore_window_geometry(self, saved: str) -> None:
         """Reapply geometry captured by ``_window_geometry``.
 
-        Applied immediately and then once more on the next idle cycle: the
-        rebuild completes after the current callback returns, and Tk can resize
-        the window again at that point, which would otherwise undo this.
+        Applied immediately and then once more on the next idle cycle so text
+        layout recalculation cannot change the outer window size.
         """
         if not saved:
             return
