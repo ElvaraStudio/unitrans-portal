@@ -56,7 +56,15 @@ from monitors import (
     placement_for,
 )
 from theme import DARK, LIGHT
-from updater import check_for_update, format_size
+from updater import (
+    UpdateCancelled,
+    UpdateDownloadError,
+    check_for_update,
+    download_update,
+    format_size,
+    launch_update_helper,
+    supports_self_update,
+)
 from version import APP_VERSION, display_version, version_label
 
 
@@ -2451,6 +2459,16 @@ I18N = {
         "update_size": "Download size: {size}",
         "update_whats_new": "What's new",
         "update_download": "Open download page",
+        "update_install": "Download and install",
+        "update_install_restart": "Install and restart",
+        "update_downloading": "Downloading update…",
+        "update_progress": "Downloaded {received} of {total}",
+        "update_ready": "Download verified. Install now to restart the app.",
+        "update_installing": "Installing update and restarting…",
+        "update_wait_for_work": "Finish the current task before installing the update.",
+        "update_download_failed": "Update download failed: {error}",
+        "update_download_cancelled": "Download cancelled. You can try again.",
+        "update_install_failed": "Could not start the update: {error}",
         "update_later": "Later",
         "update_open_failed": "Could not open the download page in a browser.\n\n{url}",
         "update_notes_missing": "No release notes were published for this version.",
@@ -2607,6 +2625,16 @@ I18N = {
         "update_size": "下载大小：{size}",
         "update_whats_new": "更新内容",
         "update_download": "打开下载页面",
+        "update_install": "下载并安装",
+        "update_install_restart": "安装并重启",
+        "update_downloading": "正在下载更新…",
+        "update_progress": "已下载 {received} / {total}",
+        "update_ready": "下载已验证。现在安装将重新启动应用。",
+        "update_installing": "正在安装更新并重新启动…",
+        "update_wait_for_work": "请先完成当前任务，再安装更新。",
+        "update_download_failed": "更新下载失败：{error}",
+        "update_download_cancelled": "已取消下载。您可以稍后重试。",
+        "update_install_failed": "无法启动更新：{error}",
         "update_later": "稍后",
         "update_open_failed": "无法在浏览器中打开下载页面。\n\n{url}",
         "update_notes_missing": "此版本没有发布更新说明。",
@@ -4155,12 +4183,7 @@ class WaybillSorterApp(tk.Tk):
             )
 
     def show_update_dialog(self, result: object) -> None:
-        """Tell the user what changed, with a link to download it.
-
-        Notify-only by design: the app opens the release page rather than
-        replacing its own executable. Self-replacement needs a verified
-        download and a rollback path, which is a separate change.
-        """
+        """Show release notes and safely download/apply a packaged update."""
         remote = str(getattr(result, "remote_version", ""))
         window = tk.Toplevel(self)
         window.title(self.tr("update_title"))
@@ -4211,10 +4234,18 @@ class WaybillSorterApp(tk.Tk):
             notes_text.insert(tk.END, f"\u2022 {note}\n\n")
         notes_text.configure(state=tk.DISABLED)
 
+        progress_label = tk.Label(
+            body, text="", bg=SURFACE, fg=TEXT_MUTED, font=("Segoe UI", 9),
+            anchor="w", justify="left", wraplength=500,
+        )
+        progress_bar = ttk.Progressbar(body, orient=tk.HORIZONTAL, mode="determinate")
+
         buttons = tk.Frame(body, bg=SURFACE)
         buttons.pack(fill=tk.X, pady=(16, 0))
 
         url = str(getattr(result, "release_page", "") or getattr(result, "download_url", ""))
+        cancel_event = threading.Event()
+        state: dict[str, object] = {"busy": False, "staged_path": None, "install_started": False}
 
         def open_download() -> None:
             try:
@@ -4227,12 +4258,177 @@ class WaybillSorterApp(tk.Tk):
                     parent=window,
                 )
 
-        self._primary_button(
-            buttons, self.tr("update_download"), open_download, label_key="update_download"
-        ).pack(side=tk.RIGHT)
-        self._secondary_button(buttons, self.tr("update_later"), window.destroy).pack(
-            side=tk.RIGHT, padx=(0, 8)
+        def close_dialog() -> None:
+            cancel_event.set()
+            if state.get("install_started"):
+                self.destroy()
+                return
+            staged = state.get("staged_path")
+            if staged and not state.get("install_started"):
+                try:
+                    Path(staged).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            try:
+                window.destroy()
+            except tk.TclError:
+                pass
+
+        def update_progress(received: int, total: int | None) -> None:
+            try:
+                self.after(0, lambda: render_progress(received, total))
+            except (tk.TclError, RuntimeError):
+                pass
+
+        def render_progress(received: int, total: int | None) -> None:
+            try:
+                if not window.winfo_exists():
+                    return
+                if total:
+                    progress_bar.configure(mode="determinate", maximum=total, value=received)
+                    progress_label.configure(
+                        text=self.tr(
+                            "update_progress",
+                            received=format_size(received),
+                            total=format_size(total),
+                        )
+                    )
+                else:
+                    progress_label.configure(text=self.tr("update_downloading"))
+            except tk.TclError:
+                pass
+
+        def download_failed(error: Exception) -> None:
+            state["busy"] = False
+            try:
+                if not window.winfo_exists():
+                    return
+                progress_bar.stop()
+                progress_label.configure(
+                    text=(
+                        self.tr("update_download_cancelled")
+                        if isinstance(error, UpdateCancelled)
+                        else self.tr("update_download_failed", error=str(error))
+                    ),
+                    fg=STATE_ERROR if not isinstance(error, UpdateCancelled) else TEXT_MUTED,
+                )
+                self._set_primary_button_enabled(install_button, True)
+                install_button.configure(command=start_download)
+            except tk.TclError:
+                pass
+
+        def download_complete(staged_path: Path) -> None:
+            state["busy"] = False
+            state["staged_path"] = staged_path
+            try:
+                if not window.winfo_exists():
+                    staged_path.unlink(missing_ok=True)
+                    return
+                progress_bar.stop()
+                expected_size = getattr(result, "size_bytes", None) or 100
+                progress_bar.configure(mode="determinate", maximum=expected_size, value=expected_size)
+                progress_label.configure(text=self.tr("update_ready"), fg=STATE_SUCCESS)
+                install_button.configure(text=self.tr("update_install_restart"), command=install_update)
+                self._set_primary_button_enabled(install_button, True)
+            except tk.TclError:
+                staged_path.unlink(missing_ok=True)
+
+        def start_download() -> None:
+            if state["busy"]:
+                return
+            if not supports_self_update():
+                open_download()
+                return
+            if self.worker_running:
+                progress_label.pack(fill=tk.X, pady=(10, 4), before=buttons)
+                progress_label.configure(text=self.tr("update_wait_for_work"), fg=STATE_WARNING)
+                return
+
+            state["busy"] = True
+            state["staged_path"] = None
+            cancel_event.clear()
+            progress_label.pack(fill=tk.X, pady=(10, 4), before=buttons)
+            progress_label.configure(text=self.tr("update_downloading"), fg=TEXT_MUTED)
+            progress_bar.pack(fill=tk.X, pady=(0, 2), before=buttons)
+            expected_size = getattr(result, "size_bytes", None)
+            if expected_size:
+                progress_bar.stop()
+                progress_bar.configure(mode="determinate", maximum=expected_size, value=0)
+            else:
+                progress_bar.configure(mode="indeterminate")
+                progress_bar.start(12)
+            self._set_primary_button_enabled(install_button, False)
+
+            def worker() -> None:
+                try:
+                    staged_path = download_update(
+                        result,
+                        progress_callback=update_progress,
+                        cancel_event=cancel_event,
+                    )
+                    self.after(0, lambda: download_complete(staged_path))
+                except Exception as exc:
+                    try:
+                        self.after(0, lambda error=exc: download_failed(error))
+                    except (tk.TclError, RuntimeError):
+                        pass
+
+            threading.Thread(target=worker, name="update-download", daemon=True).start()
+
+        def install_update() -> None:
+            staged_path = state.get("staged_path")
+            if not staged_path:
+                return
+            if self.worker_running:
+                progress_label.configure(text=self.tr("update_wait_for_work"), fg=STATE_WARNING)
+                return
+            try:
+                launch_update_helper(
+                    Path(staged_path),
+                    str(getattr(result, "sha256", "")),
+                )
+            except UpdateDownloadError as exc:
+                progress_label.configure(
+                    text=self.tr("update_install_failed", error=str(exc)), fg=STATE_ERROR
+                )
+                install_button.configure(text=self.tr("update_install_restart"), command=install_update)
+                self._set_primary_button_enabled(install_button, True)
+                return
+
+            state["install_started"] = True
+            progress_label.configure(text=self.tr("update_installing"), fg=TEXT_MUTED)
+            self._set_primary_button_enabled(install_button, False)
+            later_button.configure(state=tk.DISABLED)
+            # The helper is already waiting on this process; exit cleanly so it
+            # can replace the executable, then relaunch the verified build.
+            self.after(250, self.destroy)
+
+        initial_install_label = self.tr("update_install") if supports_self_update() else self.tr("update_download")
+        install_button = self._primary_button(
+            buttons,
+            initial_install_label,
+            start_download,
+            label_key="update_install" if supports_self_update() else "update_download",
         )
+        if supports_self_update():
+            try:
+                from tkinter import font as tkfont
+
+                button_font = tkfont.Font(root=self, font=install_button.cget("font"))
+                labels = [
+                    str(language[key])
+                    for language in I18N.values()
+                    for key in ("update_install", "update_install_restart")
+                ]
+                char_width = max(1, button_font.measure("0"))
+                width = (max(button_font.measure(label) for label in labels) + char_width - 1) // char_width + 2
+                install_button.configure(width=width)
+            except Exception:
+                pass
+        install_button.pack(side=tk.RIGHT)
+        later_button = self._secondary_button(buttons, self.tr("update_later"), close_dialog)
+        later_button.pack(side=tk.RIGHT, padx=(0, 8))
+        window.protocol("WM_DELETE_WINDOW", close_dialog)
 
         window.update_idletasks()
         x = self.winfo_rootx() + max(40, (self.winfo_width() - window.winfo_width()) // 2)

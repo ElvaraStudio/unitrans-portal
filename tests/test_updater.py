@@ -13,9 +13,11 @@ Run with:
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import sys
 import tempfile
+import threading
 import unittest
 import urllib.error
 from pathlib import Path
@@ -57,8 +59,13 @@ def manifest_bytes(
         "app": "Unitrans Portal",
         "version": version,
         "display_version": version,
-        "download_url": f"https://example.invalid/Unitrans-Portal-{version}.exe",
-        "release_page": f"https://example.invalid/releases/tag/v{version}",
+        "download_url": (
+            f"https://github.com/ElvaraStudio/unitrans-portal/releases/download/"
+            f"v{version}/Unitrans-Portal-{version}.exe"
+        ),
+        "release_page": (
+            f"https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v{version}"
+        ),
         "file": {
             "name": f"Unitrans-Portal-{version}.exe",
             "size": size,
@@ -238,7 +245,10 @@ class TestUpdateCheck(unittest.TestCase):
     def test_unparseable_remote_version_is_reported(self):
         body = json.dumps({
             "version": "not-a-version",
-            "download_url": "https://x.invalid/a.exe",
+            "download_url": (
+                "https://github.com/ElvaraStudio/unitrans-portal/releases/download/"
+                "vnot-a-version/Unitrans-Portal-not-a-version.exe"
+            ),
             "file": {"sha256": "a" * 64},
         }).encode("utf-8")
         result = updater.check_for_update(opener=opener_returning(body))
@@ -248,6 +258,103 @@ class TestUpdateCheck(unittest.TestCase):
     def test_manifest_url_is_the_latest_release_endpoint(self):
         self.assertEqual(updater.MANIFEST_URL, updater.MANIFEST_URL.strip())
         self.assertIn("/releases/latest/download/manifest.json", updater.MANIFEST_URL)
+
+    def test_manifest_rejects_plain_http_downloads(self):
+        payload = json.loads(manifest_bytes(NEWER))
+        payload["download_url"] = payload["download_url"].replace("https://", "http://")
+        result = updater.check_for_update(opener=opener_returning(json.dumps(payload).encode()))
+        self.assertFalse(result.ok)
+        self.assertIn("official GitHub", result.error or "")
+
+
+class TestUpdateDownload(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.destination = Path(self._tmp.name)
+        self.payload = b"verified updater payload" * 1700
+        self.result = updater.UpdateCheckResult(
+            status="update-available",
+            current_version="0.4.3",
+            remote_version="0.4.4",
+            download_url=(
+                "https://github.com/ElvaraStudio/unitrans-portal/releases/download/"
+                "v0.4.4/Unitrans-Portal-0.4.4.exe"
+            ),
+            size_bytes=len(self.payload),
+            sha256=hashlib.sha256(self.payload).hexdigest(),
+        )
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_download_streams_and_verifies_sha256(self):
+        progress = []
+        path = updater.download_update(
+            self.result,
+            destination_dir=self.destination,
+            opener=opener_returning(self.payload),
+            progress_callback=lambda received, total: progress.append((received, total)),
+        )
+        self.assertEqual(path.read_bytes(), self.payload)
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.result.sha256)
+        self.assertEqual(progress[-1], (len(self.payload), len(self.payload)))
+        self.assertEqual(list(self.destination.glob("*.part")), [])
+
+    def test_hash_mismatch_discards_partial_download(self):
+        self.result.sha256 = "b" * 64
+        with self.assertRaisesRegex(updater.UpdateDownloadError, "SHA-256"):
+            updater.download_update(
+                self.result,
+                destination_dir=self.destination,
+                opener=opener_returning(self.payload),
+            )
+        self.assertEqual(list(self.destination.iterdir()), [])
+
+    def test_incomplete_download_is_rejected_and_discarded(self):
+        self.result.size_bytes += 1
+        with self.assertRaisesRegex(updater.UpdateDownloadError, "size did not match"):
+            updater.download_update(
+                self.result,
+                destination_dir=self.destination,
+                opener=opener_returning(self.payload),
+            )
+        self.assertEqual(list(self.destination.iterdir()), [])
+
+    def test_cancelled_download_discards_partial_file(self):
+        cancelled = threading.Event()
+        cancelled.set()
+        with self.assertRaises(updater.UpdateCancelled):
+            updater.download_update(
+                self.result,
+                destination_dir=self.destination,
+                opener=opener_returning(self.payload),
+                cancel_event=cancelled,
+            )
+        self.assertEqual(list(self.destination.iterdir()), [])
+
+    def test_download_rejects_untrusted_redirect(self):
+        class RedirectedResponse(FakeResponse):
+            def geturl(self):
+                return "https://evil.example/payload.exe"
+
+        with self.assertRaisesRegex(updater.UpdateDownloadError, "untrusted host"):
+            updater.download_update(
+                self.result,
+                destination_dir=self.destination,
+                opener=lambda request, timeout=None: RedirectedResponse(self.payload),
+            )
+        self.assertEqual(list(self.destination.iterdir()), [])
+
+    def test_helper_script_waits_verifies_and_has_a_rollback(self):
+        target = self.destination / "Chris's Unitrans Portal.exe"
+        staged = self.destination / "verified update.exe"
+        script = updater.build_update_helper_script(target, staged, "a" * 64, 321)
+        self.assertIn("Chris''s Unitrans Portal.exe", script)
+        self.assertIn("Waiting for the app to close", script)
+        self.assertIn("Get-UpdateFileHash", script)
+        self.assertIn("$target.previous", script)
+        self.assertIn("Rollback failed", script)
+        self.assertIn("321", script)
 
 
 class TestSizeFormatting(unittest.TestCase):

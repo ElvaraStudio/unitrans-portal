@@ -15,13 +15,26 @@ behaviour can still change between versions.
 
 ### Planned
 
-- One-click in-app updating: download the new build, verify its SHA-256, and
-  replace the installed executable with automatic rollback if the swap fails.
-  Today the app tells you an update exists and opens the download page.
 - Automatic update checks on launch. The setting is stored but the feature is
   not implemented; checking is manual.
-- `progress_value` and `progress_text` are written but never displayed - there
-  is no progress bar in the current UI. Either wire one up or remove them.
+- The main workflow's `progress_value` and `progress_text` are written but never
+  displayed. Either wire them up or remove them.
+
+## [0.4.4] - 2026-10-12
+
+### Added
+
+- Packaged Windows builds can download updates inside the app, show download
+  progress, verify the SHA-256 hash, and install the verified executable after
+  the app closes. The app restarts automatically after installation.
+- A separate update helper keeps the previous executable and restores it if
+  the replacement cannot start.
+
+### Changed
+
+- Version advanced to 0.4.4.
+- Older builds can still open the release page, but must be manually installed
+  once before they can use in-app downloading and installation.
 
 ## [0.4.3] - 2026-10-12
 
@@ -286,7 +299,8 @@ First beta release.
   permissions-style encryption.
 - English and Chinese interface.
 
-[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.4
 [0.4.3]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.3
 [0.4.2]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.2
 [0.4.1]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.1

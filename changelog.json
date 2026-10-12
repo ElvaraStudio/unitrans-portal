@@ -3,6 +3,29 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.4.4",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Download and install updates in the app",
+        "notes": [
+          "Packaged Windows builds can download an update in the app and show its progress.",
+          "The downloaded executable is verified against the release SHA-256 before installation.",
+          "The app closes and restarts to apply the update. A backup is kept and restored if the new build cannot start.",
+          "Older versions need one manual install before they can use in-app downloading and installation."
+        ]
+      },
+      "zh": {
+        "headline": "在应用中下载并安装更新",
+        "notes": [
+          "Windows 安装版现在可以直接在应用中下载更新并显示进度。",
+          "安装前会使用发布清单中的 SHA-256 校验下载的程序。",
+          "应用会关闭并重新启动以完成更新。如果新版本无法启动，会保留并恢复旧版本。",
+          "旧版本需要先手动安装一次，之后才能使用应用内下载和安装。"
+        ]
+      }
+    },
+    {
       "version": "0.4.3",
       "date": "2026-10-12",
       "kind": "beta",

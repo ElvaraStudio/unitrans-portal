@@ -5,7 +5,7 @@ PDF waybills into the same order as the Excel workbook, creates a single bulk
 PDF for printing, fills blank driver numbers from scanned waybill images, and
 removes protection from PDFs and Excel workbooks.
 
-**Version 0.4.3 (Beta)** — publisher Elvara Studio.
+**Version 0.4.4 (Beta)** — publisher Elvara Studio.
 
 > **Beta:** the version is `0.x.y`, which means the interface and behaviour can
 > still change between releases. Version numbering was restarted at 0.1.0; the
@@ -75,6 +75,7 @@ skipped and listed in the report.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.4 | 2026-10-12 | In-app downloads with hash verification, restart, and rollback. |
 | 0.4.3 | 2026-10-12 | Seamless waybill sorter language/theme switching with stable control sizes. |
 | 0.4.2 | 2026-10-12 | Language and theme changes refresh in place; controls keep fixed sizes. |
 | 0.4.1 | 2026-10-12 | Smooth language/theme switching and fixed control sizes; includes PDF and Excel unlocking. |
@@ -111,9 +112,16 @@ stays open and controls keep their size and position throughout the change.
 ## Checking for updates
 
 Open **Settings** (top-right of the window) and choose **Check for updates now**.
-The app reads `releases/latest/download/manifest.json` from GitHub, compares the
-version, and either confirms you are current or lists what changed with a button
-to open the download page.
+The app reads `releases/latest/download/manifest.json` from GitHub and compares
+the version. A packaged Windows build can download the update in the app, show
+progress, verify the SHA-256 hash, and install it after you choose **Install and
+restart**. The app closes and opens again with the new version. If replacing or
+starting the new executable fails, the helper restores the previous copy.
+
+Versions before 0.4.4 only open the release page. Install 0.4.4 manually once;
+later updates can be downloaded and installed from inside the app. Running the
+Python source also opens the release page because it has no packaged executable
+to replace.
 
 **The app does not check for updates on its own.** There is no background or
 launch-time check in this version — you start it manually. The
@@ -124,7 +132,7 @@ implemented yet.
 From a terminal, the same check is available without the GUI:
 
 ```powershell
-.\releases\Unitrans-Portal-0.4.3.exe --check-updates
+.\releases\Unitrans-Portal-0.4.4.exe --check-updates
 ```
 
 Exit codes: `0` up to date, `2` update available, `1` the check failed. Being
@@ -181,16 +189,20 @@ of running) → `%LOCALAPPDATA%\Python\bin\python.exe`. Pin one explicitly with
 Releases are currently built with Python 3.14.6. The original 1.0 build used
 3.12; re-test after any change of interpreter.
 
-## How updates will work
+## How updates work
 
-> **Partly implemented.** The check is live (see "Checking for updates" above).
-> Downloading and installing a build from inside the app is not.
+The check and verified installation flow are implemented for packaged Windows
+builds. Checks remain manual; the app does not check for updates on launch.
 
 The app reads `releases/latest/download/manifest.json` on GitHub. The manifest
 is a small document naming the newest version, where to download it, its size,
-and its SHA-256. If a newer version exists, the app shows what changed and offers
-to open the download page. Replacing the installed executable from inside the app
-is the next step and needs a verified download plus a rollback path.
+and its SHA-256. If a newer version exists, the app shows what changed. After
+you choose to download it, the app streams the executable into a temporary
+staging folder, checks the file size and SHA-256, and refuses to install a
+partial or mismatched file. A separate helper waits for the app to exit, keeps
+the previous executable as a backup, replaces it with the verified build, and
+restarts the app. If the replacement cannot start, the helper restores the
+backup.
 
 > **Two constraints the updater depends on — do not break these:**
 >
@@ -208,13 +220,12 @@ is the next step and needs a verified download plus a rollback path.
 
 Design decisions already made:
 
-- **Notify only, never mid-job.** The app reports an available update and opens
-  the download page; it does not interrupt work in progress.
-- **Verified before running.** A future downloaded build will only be used if its
-  SHA-256 matches the manifest, so a truncated or tampered download is refused.
-- **Reversible.** The planned update will keep a backup of the current executable
-  and restore it if the swap fails, so a failed update cannot leave the tool
-  unusable.
+- **Explicit restart.** The app only starts the update after you choose
+  **Install and restart**; it does not interrupt a workflow by itself.
+- **Verified before installing.** The downloaded file must match the manifest's
+  SHA-256 and size.
+- **Reversible.** The update helper keeps the previous executable and restores
+  it if the new copy cannot start.
 - **Per-user install.** The intended installer places the app under
   `%LOCALAPPDATA%\Programs`, which needs no administrator rights — so updating
   needs none either.
@@ -228,7 +239,7 @@ Design decisions already made:
 |---|---|
 | `waybill_sorter.py` | The application and its interface. |
 | `version.py` | Version and product identity — the single source of truth. |
-| `updater.py` | Update checking: fetches and validates the release manifest. |
+| `updater.py` | Update checking, verified downloads, and the Windows replacement helper. |
 | `settings.py` | Per-user settings in `%APPDATA%\UnitransPortal`. |
 | `make_assets.py` | Generates the app icon from the logo. |
 | `releasectl.py` | Generates the update manifest, publishes releases. |
