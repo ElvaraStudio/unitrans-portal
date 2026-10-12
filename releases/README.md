@@ -19,7 +19,8 @@ Everything else here is a build artifact and can be deleted safely; run
 
 | Version | Artifact | Built | Size | SHA-256 |
 |---|---|---|---|---|
-| 0.4.4 | `Unitrans-Portal-0.4.4.exe` and `Unitrans-Portal-0.4.4-Setup.exe` | 2026-10-12 | 27.1 MB portable; 28.6 MB installer. Portable SHA-256: `25bd39cbdda948a56ba3f77b39a1c39345c7c2bec04be9e627c8924e286594d3`. Installer SHA-256: `7452fc76c6f55c7303c0f943ce54613d73fa5f5dc2e56a75b026f029243a9489`. |
+| 0.4.5 | `Unitrans-Portal-0.4.5.exe` and `Unitrans-Portal-0.4.5-Setup.exe` | 2026-10-12 | 27.1 MB portable; 28.5 MB installer. Portable SHA-256: `ce39517f17341d7b2ce67cd348e11c48f92b6442527de7190063edfb38827b1c`. Installer SHA-256: `c2e504e07c5438eff6b088d643376164f1da1573e618fb20681b3665b168258e`. |
+| 0.4.4 | `Unitrans-Portal-0.4.4.exe` and `Unitrans-Portal-0.4.4-Setup.exe` | 2026-10-12 | Superseded by 0.4.5. |
 | 0.4.3 | `Unitrans-Portal-0.4.3.exe` and `Unitrans-Portal-0.4.3-Setup.exe` | 2026-10-12 | Superseded by 0.4.4. |
 | 0.4.2 | `Unitrans-Portal-0.4.2.exe` and `Unitrans-Portal-0.4.2-Setup.exe` | 2026-10-12 | Superseded by 0.4.3. |
 | 0.4.1 | `Unitrans-Portal-0.4.1.exe` and `Unitrans-Portal-0.4.1-Setup.exe` | 2026-10-12 | Published on GitHub. |
@@ -32,6 +33,7 @@ since the manifest was generated.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.5 | 2026-10-12 | Removed the unused Display setting; use standard Windows window placement. |
 | 0.4.4 | 2026-10-12 | In-app download with size/hash verification, restart, and rollback. |
 | 0.4.3 | 2026-10-12 | Seamless waybill sorter language/theme switching with stable control sizes. |
 | 0.4.2 | 2026-10-12 | Language and theme changes refresh in place; controls keep fixed sizes. |

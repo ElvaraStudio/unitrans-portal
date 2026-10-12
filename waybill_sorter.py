@@ -48,13 +48,6 @@ from tkinter import filedialog, messagebox, ttk
 
 import settings as app_settings
 import theme
-from monitors import (
-    MONITOR_DEFAULT,
-    Monitor,
-    apply_startup_placement,
-    list_monitors,
-    placement_for,
-)
 from theme import DARK, LIGHT
 from updater import (
     UpdateCancelled,
@@ -2447,12 +2440,6 @@ I18N = {
         "settings_theme_dark": "Dark",
         "theme_to_dark": "Dark mode",
         "theme_to_light": "Light mode",
-        "settings_display": "Display",
-        "settings_monitor_hint": "Choose which screen the app opens on. Windows cannot do this for us, so the choice is applied when the app starts.",
-        "settings_monitor_primary": "Primary screen",
-        "settings_monitor_secondary": "Second screen",
-        "settings_monitor_apply": "Applies the next time the app opens.",
-        "settings_monitor_single": "Only one screen was detected, so the app opens there.",
         "update_title": "Update available",
         "update_heading": "Version {version} is available",
         "update_current": "You are running {current}.",
@@ -2613,12 +2600,6 @@ I18N = {
         "settings_theme_dark": "深色",
         "theme_to_dark": "深色模式",
         "theme_to_light": "浅色模式",
-        "settings_display": "显示器",
-        "settings_monitor_hint": "选择软件在哪个屏幕上打开。Windows 无法自动完成此设置，因此在软件启动时应用。",
-        "settings_monitor_primary": "主屏幕",
-        "settings_monitor_secondary": "第二屏幕",
-        "settings_monitor_apply": "下次打开软件时生效。",
-        "settings_monitor_single": "只检测到一个屏幕，软件将在此屏幕上打开。",
         "update_title": "有可用更新",
         "update_heading": "有新版本 {version} 可用",
         "update_current": "当前版本为 {current}。",
@@ -2747,7 +2728,6 @@ class WaybillSorterApp(tk.Tk):
         self.widgets: dict[str, object] = {}
 
         self._build_workflow_selector()
-        self.after(100, self.show_maximized)
 
     def tr(self, key: str, **kwargs: object) -> str:
         text = I18N[self.language.get()].get(key, I18N["en"].get(key, key))
@@ -3752,48 +3732,6 @@ class WaybillSorterApp(tk.Tk):
         self.progress_value.set(max(0, min(100, value)))
         self.progress_text.set(text)
 
-    def show_maximized(self) -> None:
-        """Open on the configured monitor.
-
-        The window is *not* maximised. It is meant to appear on a screen the
-        user is not currently working on - usually a second monitor - so it
-        opens at a comfortable size, positioned without stealing focus, and
-        waits there. Maximising would cover whatever is already on that screen.
-
-        Placement goes through ``SetWindowPos`` on the window frame because
-        Tk's own ``geometry()`` positions the client area and cannot put a
-        window precisely on a secondary display; ``winfo_screenwidth`` also
-        reports only the primary monitor, so Tk alone cannot size a window for
-        any other screen.
-        """
-        try:
-            preference = int(self.user_settings.get("startup_monitor", MONITOR_DEFAULT))
-        except (TypeError, ValueError):
-            preference = MONITOR_DEFAULT
-
-        try:
-            monitors = list_monitors()
-        except Exception:
-            monitors = []
-
-        if not monitors:
-            # No monitor information: leave the window where the window manager
-            # put it rather than guessing.
-            return
-
-        # Deferred so the window is mapped before being moved; moving an
-        # unmapped toplevel is ignored on Windows.
-        def place() -> None:
-            try:
-                apply_startup_placement(self, preference, maximise=False, monitors=monitors)
-            except Exception:
-                pass
-
-        try:
-            self.after(80, place)
-        except tk.TclError:
-            pass
-
     def format_pdf_page_check(self, analysis: PdfFolderAnalysis) -> str:
         if not analysis.page_counts:
             return self.tr("pdf_check_unknown")
@@ -4011,50 +3949,6 @@ class WaybillSorterApp(tk.Tk):
 
         ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
 
-        # --- display -------------------------------------------------------
-        tk.Label(
-            body, text=self.tr("settings_display"), bg=SURFACE, fg=TEXT_HEADING,
-            font=("Segoe UI", 12, "bold"), anchor="w",
-        ).pack(fill=tk.X)
-
-        monitors = list_monitors()
-        if len(monitors) > 1:
-            tk.Label(
-                body, text=self.tr("settings_monitor_hint"), bg=SURFACE, fg=TEXT_MUTED,
-                font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
-            ).pack(fill=tk.X, pady=(8, 6))
-
-            monitor_var = tk.IntVar(
-                value=int(self.user_settings.get("startup_monitor", MONITOR_DEFAULT))
-            )
-            for monitor in monitors:
-                tag = self.tr("settings_monitor_primary") if monitor.primary else self.tr("settings_monitor_secondary")
-                tk.Radiobutton(
-                    body,
-                    text=f"{tag}  \u2014  {monitor.describe()}",
-                    variable=monitor_var,
-                    value=monitor.index,
-                    command=lambda: self._set_startup_monitor(monitor_var.get()),
-                    bg=SURFACE,
-                    activebackground=SURFACE,
-                    fg=TEXT_HEADING,
-                    font=("Segoe UI", 10),
-                    anchor="w",
-                    selectcolor=SURFACE,
-                    highlightthickness=0,
-                ).pack(fill=tk.X)
-            tk.Label(
-                body, text=self.tr("settings_monitor_apply"), bg=SURFACE, fg=TEXT_FAINT,
-                font=("Segoe UI", 9), anchor="w",
-            ).pack(fill=tk.X, pady=(4, 0))
-        else:
-            tk.Label(
-                body, text=self.tr("settings_monitor_single"), bg=SURFACE, fg=TEXT_MUTED,
-                font=("Segoe UI", 10), anchor="w", justify="left", wraplength=430,
-            ).pack(fill=tk.X, pady=(8, 0))
-
-        ttk.Separator(body, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=16)
-
         tk.Label(
             body, text=self.tr("settings_updates"), bg=SURFACE, fg=TEXT_HEADING,
             font=("Segoe UI", 12, "bold"), anchor="w",
@@ -4139,10 +4033,6 @@ class WaybillSorterApp(tk.Tk):
         apply_theme(name)
         self.configure(bg=BG_WINDOW)
         self._refresh_current_screen(old_tokens=old_tokens)
-
-    def _set_startup_monitor(self, index: int) -> None:
-        """Persist the chosen startup display."""
-        self.user_settings = app_settings.update_settings(startup_monitor=int(index))
 
     def _last_checked_text(self) -> str:
         """'Last checked: ...' or 'Never checked'."""

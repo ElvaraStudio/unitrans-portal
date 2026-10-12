@@ -3,6 +3,27 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.4.5",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Simpler Settings",
+        "notes": [
+          "Removed the unused Display section from Settings.",
+          "The app now relies on standard Windows window placement and remains resizable.",
+          "Version advanced to 0.4.5."
+        ]
+      },
+      "zh": {
+        "headline": "简化设置页面",
+        "notes": [
+          "已从设置中移除未使用的显示器选项。",
+          "应用现在使用 Windows 的标准窗口定位方式，并保持窗口可调整大小。",
+          "版本已更新至 0.4.5。"
+        ]
+      }
+    },
+    {
       "version": "0.4.4",
       "date": "2026-10-12",
       "kind": "beta",

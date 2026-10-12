@@ -33,9 +33,6 @@ DEFAULTS: dict[str, Any] = {
     # The version the user was last told about, so a prompt is not repeated on
     # every launch for the same release.
     "last_seen_version": "",
-    # Which display to open on: 0 = primary, 1 = second monitor. Tk can only
-    # address the primary display, so this is honoured through monitors.py.
-    "startup_monitor": 1,
     # Colour scheme: "light" or "dark". Read by theme.py.
     "theme": "light",
 }

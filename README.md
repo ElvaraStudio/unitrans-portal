@@ -5,7 +5,7 @@ PDF waybills into the same order as the Excel workbook, creates a single bulk
 PDF for printing, fills blank driver numbers from scanned waybill images, and
 removes protection from PDFs and Excel workbooks.
 
-**Version 0.4.4 (Beta)** — publisher Elvara Studio.
+**Version 0.4.5 (Beta)** — publisher Elvara Studio.
 
 > **Beta:** the version is `0.x.y`, which means the interface and behaviour can
 > still change between releases. Version numbering was restarted at 0.1.0; the
@@ -93,18 +93,10 @@ The app shows its own version in the footer and in the Settings window, and
 Windows Explorer ▸ Properties ▸ Details shows the file version of the installed
 executable.
 
-## Window and display
+## Window
 
-The app opens as a normal resizable window on the display chosen in
-**Settings ▸ Display** (the second screen by default, falling back to the
-primary if there is only one).
-
-It is deliberately **not maximised**: the point of opening on a second monitor
-is that it is waiting there when you look at it, without covering whatever you
-are already working on. Placement uses `SetWindowPos` on the window frame
-because Tk's `geometry()` positions the client area and cannot place a window
-precisely on a secondary display — `winfo_screenwidth` also reports only the
-primary monitor, so Tk alone cannot size a window for any other screen.
+The app opens in a standard resizable window. Move or maximize it with the
+normal Windows window controls.
 
 Switching language and theme updates the existing interface in place. The app
 stays open and controls keep their size and position throughout the change.

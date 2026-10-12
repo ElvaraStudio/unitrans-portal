@@ -1,34 +1,32 @@
 {
   "app": "Unitrans Portal",
   "publisher": "Elvara Studio",
-  "version": "0.4.4",
-  "display_version": "0.4.4 (Beta)",
+  "version": "0.4.5",
+  "display_version": "0.4.5 (Beta)",
   "published": "2026-10-12",
   "beta": true,
-  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.4.4/Unitrans-Portal-0.4.4.exe",
-  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.4",
+  "download_url": "https://github.com/ElvaraStudio/unitrans-portal/releases/download/v0.4.5/Unitrans-Portal-0.4.5.exe",
+  "release_page": "https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.5",
   "file": {
-    "name": "Unitrans-Portal-0.4.4.exe",
-    "size": 28401800,
-    "sha256": "25bd39cbdda948a56ba3f77b39a1c39345c7c2bec04be9e627c8924e286594d3"
+    "name": "Unitrans-Portal-0.4.5.exe",
+    "size": 28391290,
+    "sha256": "ce39517f17341d7b2ce67cd348e11c48f92b6442527de7190063edfb38827b1c"
   },
   "notes": {
     "en": {
-      "headline": "Download and install updates in the app",
+      "headline": "Simpler Settings",
       "notes": [
-        "Packaged Windows builds can download an update in the app and show its progress.",
-        "The downloaded executable is verified against the release SHA-256 before installation.",
-        "The app closes and restarts to apply the update. A backup is kept and restored if the new build cannot start.",
-        "Older versions need one manual install before they can use in-app downloading and installation."
+        "Removed the unused Display section from Settings.",
+        "The app now relies on standard Windows window placement and remains resizable.",
+        "Version advanced to 0.4.5."
       ]
     },
     "zh": {
-      "headline": "在应用中下载并安装更新",
+      "headline": "简化设置页面",
       "notes": [
-        "Windows 安装版现在可以直接在应用中下载更新并显示进度。",
-        "安装前会使用发布清单中的 SHA-256 校验下载的程序。",
-        "应用会关闭并重新启动以完成更新。如果新版本无法启动，会保留并恢复旧版本。",
-        "旧版本需要先手动安装一次，之后才能使用应用内下载和安装。"
+        "已从设置中移除未使用的显示器选项。",
+        "应用现在使用 Windows 的标准窗口定位方式，并保持窗口可调整大小。",
+        "版本已更新至 0.4.5。"
       ]
     }
   }

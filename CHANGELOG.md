@@ -20,6 +20,14 @@ behaviour can still change between versions.
 - The main workflow's `progress_value` and `progress_text` are written but never
   displayed. Either wire them up or remove them.
 
+## [0.4.5] - 2026-10-12
+
+### Changed
+
+- Removed the unused Display section from Settings. Window placement is left to
+  Windows, and the app keeps its standard resizable window.
+- Version advanced to 0.4.5.
+
 ## [0.4.4] - 2026-10-12
 
 ### Added
