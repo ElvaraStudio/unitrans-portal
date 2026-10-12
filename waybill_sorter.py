@@ -15,12 +15,14 @@ import tempfile
 import threading
 import unicodedata
 import webbrowser
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
 try:
     from openpyxl import load_workbook
+    import msoffcrypto
     from pypdf import PdfReader, PdfWriter
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.utils import ImageReader
@@ -221,6 +223,8 @@ ACTION_BUTTON_KEYS = frozenset({
     # buttons. Note the two distinct "folder" labels.
     "choose_excel",
     "choose_folder",
+    "choose_unlock_files",
+    "choose_unlock_folder",
     "choose_images",
 })
 
@@ -319,6 +323,9 @@ class PdfUnlockResult:
     already_unlocked_count: int
     skipped_count: int
     failed_count: int
+
+
+UnlockResult = PdfUnlockResult
 
 
 @dataclass(frozen=True)
@@ -1676,8 +1683,70 @@ def write_decrypted_pdf(reader: object, output_path: Path) -> None:
         writer.write(handle)
 
 
-def unlock_pdf_folder(
-    pdf_folder: Path,
+UNLOCKABLE_EXTENSIONS = {".pdf", ".xlsx", ".xlsm", ".xltx", ".xltm"}
+
+
+def _unlock_spreadsheet(source: Path, destination: Path, password: str) -> tuple[bool, bool, str]:
+    """Return (changed, skipped, note) for an Excel Open XML workbook."""
+    encrypted = False
+    decrypted_path: Path | None = None
+    with source.open("rb") as source_handle:
+        office_file = msoffcrypto.OfficeFile(source_handle)
+        encrypted = office_file.is_encrypted()
+        if encrypted:
+            if not password:
+                return False, True, "Workbook requires an open password; enter it and retry."
+            try:
+                office_file.load_key(password=password)
+                with tempfile.NamedTemporaryFile(
+                    prefix="unitrans-decrypted-", suffix=source.suffix,
+                    dir=destination.parent, delete=False,
+                ) as output_handle:
+                    decrypted_path = Path(output_handle.name)
+                    office_file.decrypt(output_handle)
+            except Exception:
+                if decrypted_path:
+                    decrypted_path.unlink(missing_ok=True)
+                return False, True, "The workbook password was not accepted; source was not changed."
+
+    removed_protection = False
+    try:
+        input_path = decrypted_path or source
+        with zipfile.ZipFile(input_path, "r") as source_zip, zipfile.ZipFile(destination, "w") as output_zip:
+            for entry in source_zip.infolist():
+                content = source_zip.read(entry.filename)
+                if entry.filename == "xl/workbook.xml":
+                    content, count = re.subn(rb"<(?:[A-Za-z0-9_]+:)?workbookProtection\b[^>]*/\s*>", b"", content)
+                    removed_protection = removed_protection or count > 0
+                elif entry.filename.startswith("xl/worksheets/") and entry.filename.endswith(".xml"):
+                    content, count = re.subn(rb"<(?:[A-Za-z0-9_]+:)?sheetProtection\b[^>]*/\s*>", b"", content)
+                    removed_protection = removed_protection or count > 0
+                output_zip.writestr(entry, content)
+        with zipfile.ZipFile(destination, "r") as verify_zip:
+            bad_entry = verify_zip.testzip()
+            if bad_entry:
+                raise ValueError(f"Workbook archive verification failed at {bad_entry}.")
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    finally:
+        if decrypted_path:
+            decrypted_path.unlink(missing_ok=True)
+
+    if encrypted and removed_protection:
+        return True, False, "Removed file-open encryption and workbook/sheet protection."
+    if encrypted:
+        return True, False, "Removed file-open encryption."
+    if removed_protection:
+        return True, False, "Removed workbook and/or worksheet protection."
+    destination.unlink(missing_ok=True)
+    shutil.copy2(source, destination)
+    return False, False, "Copied unchanged; no workbook or worksheet protection was found."
+
+
+def unlock_files(
+    sources: Iterable[Path],
+    password: str = "",
     output_root: Path | None = None,
     log: Callable[[str], None] | None = None,
     progress: Callable[[int, int], None] | None = None,
@@ -1688,26 +1757,36 @@ def unlock_pdf_folder(
         if log:
             log(message)
 
-    pdf_folder = Path(pdf_folder)
-    if not pdf_folder.is_dir():
-        raise FileNotFoundError(f"PDF folder not found: {pdf_folder}")
-
-    pdf_paths = sorted(
-        (item for item in pdf_folder.iterdir() if item.is_file() and item.suffix.lower() == ".pdf"),
-        key=lambda item: item.name.lower(),
-    )
-    if not pdf_paths:
-        raise ValueError("No PDF files were found in the selected folder.")
+    selected_paths = tuple(Path(source) for source in sources)
+    source_paths: list[Path] = []
+    for source in selected_paths:
+        if source.is_dir():
+            source_paths.extend(
+                item for item in source.rglob("*")
+                if item.is_file()
+                and item.suffix.lower() in UNLOCKABLE_EXTENSIONS
+                and not any(part.startswith("unlocked_files_") for part in item.relative_to(source).parts)
+            )
+        elif source.is_file() and source.suffix.lower() in UNLOCKABLE_EXTENSIONS:
+            source_paths.append(source)
+    source_paths = sorted(dict.fromkeys(path.resolve() for path in source_paths), key=lambda item: str(item).lower())
+    if not source_paths:
+        raise ValueError("No supported PDF or Excel files were found in the selection.")
 
     timestamp = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-    base_output = Path(output_root) if output_root is not None else pdf_folder
-    output_dir = unique_path(base_output / f"unlocked_pdfs_{timestamp}")
-    unlocked_dir = output_dir / "Unlocked PDFs"
+    if output_root is not None:
+        base_output = Path(output_root)
+    elif len(selected_paths) == 1 and selected_paths[0].is_dir():
+        base_output = selected_paths[0]
+    else:
+        base_output = source_paths[0].parent
+    output_dir = unique_path(base_output / f"unlocked_files_{timestamp}")
+    unlocked_dir = output_dir / "Unlocked Files"
     unlocked_dir.mkdir(parents=True, exist_ok=True)
     report_path = output_dir / "unlock_report.csv"
     summary_path = output_dir / "summary.txt"
 
-    emit(f"Scanning {len(pdf_paths)} PDF files for removable PDF encryption.")
+    emit(f"Scanning {len(source_paths)} PDF and Excel files for removable protection.")
 
     report_rows: list[dict[str, object]] = []
     unlocked_count = 0
@@ -1715,77 +1794,91 @@ def unlock_pdf_folder(
     skipped_count = 0
     failed_count = 0
 
-    for index, pdf_path in enumerate(pdf_paths, start=1):
-        output_path = unlocked_dir / pdf_path.name
+    used_output_paths: set[Path] = set()
+    for index, source_path in enumerate(source_paths, start=1):
+        output_path = unlocked_dir / source_path.name
+        if output_path in used_output_paths:
+            output_path = output_path.with_name(f"{source_path.stem}_{hashlib.sha1(str(source_path).encode()).hexdigest()[:8]}{source_path.suffix}")
+        used_output_paths.add(output_path)
         status = ""
-        page_count: int | str = ""
         note = ""
         try:
-            reader = PdfReader(str(pdf_path), strict=False)
-            was_encrypted = bool(reader.is_encrypted)
-            if was_encrypted:
-                decrypt_result = reader.decrypt("")
-                if not decrypt_result:
-                    status = "skipped_password_required"
-                    note = "PDF requires an open password and was not changed."
-                    skipped_count += 1
-                    emit(f"[{index}/{len(pdf_paths)}] {pdf_path.name} -> skipped; open password required")
+            if source_path.suffix.lower() == ".pdf":
+                reader = PdfReader(str(source_path), strict=False)
+                if reader.is_encrypted:
+                    decrypt_result = reader.decrypt(password)
+                    if not decrypt_result:
+                        status = "skipped_password_required"
+                        note = "PDF requires a valid open password and was not changed."
+                        skipped_count += 1
+                    else:
+                        write_decrypted_pdf(reader, output_path)
+                        verify_reader = PdfReader(str(output_path), strict=False)
+                        if verify_reader.is_encrypted:
+                            raise ValueError("Output PDF is still encrypted after rewrite.")
+                        status = "unlocked"
+                        note = "Removed PDF encryption."
                 else:
-                    page_count = len(reader.pages)
-                    write_decrypted_pdf(reader, output_path)
-                    verify_reader = PdfReader(str(output_path), strict=False)
-                    if verify_reader.is_encrypted:
-                        raise ValueError("Output PDF is still encrypted after rewrite.")
-                    status = "unlocked"
-                    note = "Removed blank-password/permissions encryption."
-                    unlocked_count += 1
-                    emit(f"[{index}/{len(pdf_paths)}] {pdf_path.name} -> unlocked")
+                    shutil.copy2(source_path, output_path)
+                    status = "already_unlocked"
+                    note = "Copied unchanged; source PDF was not encrypted."
             else:
-                page_count = len(reader.pages)
-                shutil.copy2(pdf_path, output_path)
-                status = "already_unlocked"
-                note = "Copied unchanged; source PDF was not encrypted."
+                changed, skipped, note = _unlock_spreadsheet(source_path, output_path, password)
+                if skipped:
+                    status = "skipped_password_required"
+                    skipped_count += 1
+                elif changed:
+                    status = "unlocked"
+                else:
+                    status = "already_unlocked"
+
+            if status == "unlocked":
+                unlocked_count += 1
+                emit(f"[{index}/{len(source_paths)}] {source_path.name} -> unlocked")
+            elif status == "already_unlocked":
                 already_unlocked_count += 1
-                emit(f"[{index}/{len(pdf_paths)}] {pdf_path.name} -> already unlocked")
+                emit(f"[{index}/{len(source_paths)}] {source_path.name} -> already unlocked")
+            else:
+                emit(f"[{index}/{len(source_paths)}] {source_path.name} -> skipped; password required")
         except Exception as exc:
             status = "failed"
             note = str(exc)
             failed_count += 1
-            emit(f"[{index}/{len(pdf_paths)}] {pdf_path.name} -> failed: {exc}")
+            emit(f"[{index}/{len(source_paths)}] {source_path.name} -> failed: {exc}")
 
         report_rows.append(
             {
-                "source_file": str(pdf_path),
+                "source_file": str(source_path),
                 "output_file": str(output_path) if status in {"unlocked", "already_unlocked"} else "",
                 "status": status,
-                "pages": page_count,
+                "file_type": source_path.suffix.lstrip(".").upper(),
                 "note": note,
             }
         )
         if progress:
-            progress(index, len(pdf_paths))
+            progress(index, len(source_paths))
 
     with report_path.open("w", newline="", encoding="utf-8-sig") as handle:
-        writer = csv.DictWriter(handle, fieldnames=("source_file", "output_file", "status", "pages", "note"))
+        writer = csv.DictWriter(handle, fieldnames=("source_file", "output_file", "status", "file_type", "note"))
         writer.writeheader()
         writer.writerows(report_rows)
 
     write_summary(
         summary_path,
         (
-            f"PDF folder: {pdf_folder}",
+            f"Selected files: {len(source_paths)}",
             f"Output folder: {output_dir}",
-            f"PDF files scanned: {len(pdf_paths)}",
-            f"Unlocked PDFs: {unlocked_count}",
-            f"Already unlocked PDFs copied: {already_unlocked_count}",
-            f"Skipped password-required PDFs: {skipped_count}",
-            f"Failed PDFs: {failed_count}",
+            f"PDF and Excel files scanned: {len(source_paths)}",
+            f"Files unlocked: {unlocked_count}",
+            f"Already unlocked files copied: {already_unlocked_count}",
+            f"Skipped password-required files: {skipped_count}",
+            f"Failed files: {failed_count}",
             f"Report: {report_path}",
         ),
     )
 
     emit(
-        "PDF unlock finished: "
+        "File unlock finished: "
         f"{unlocked_count} unlocked; "
         f"{already_unlocked_count} already unlocked; "
         f"{skipped_count} skipped; "
@@ -1797,12 +1890,22 @@ def unlock_pdf_folder(
         unlocked_dir=unlocked_dir,
         report_path=report_path,
         summary_path=summary_path,
-        total_count=len(pdf_paths),
+        total_count=len(source_paths),
         unlocked_count=unlocked_count,
         already_unlocked_count=already_unlocked_count,
         skipped_count=skipped_count,
         failed_count=failed_count,
     )
+
+
+def unlock_pdf_folder(
+    pdf_folder: Path,
+    output_root: Path | None = None,
+    log: Callable[[str], None] | None = None,
+    progress: Callable[[int, int], None] | None = None,
+) -> PdfUnlockResult:
+    """Compatibility wrapper for the original PDF-folder workflow and CLI."""
+    return unlock_files((Path(pdf_folder),), output_root=output_root, log=log, progress=progress)
 
 
 def sort_waybills(
@@ -2250,8 +2353,8 @@ I18N = {
         "workflow_sort_desc": "Sort downloaded waybill PDFs and create a safe bulk PDF.",
         "workflow_driver": "Fill Driver Numbers",
         "workflow_driver_desc": "Read scanned waybill images and fill blank car numbers in Excel.",
-        "workflow_unlock": "Unlock PDFs",
-        "workflow_unlock_desc": "Remove editable/printing restrictions from PDFs that do not require an open password.",
+        "workflow_unlock": "Unlock Files",
+        "workflow_unlock_desc": "Remove PDF restrictions and Excel workbook/sheet protection. Supports individual files or a folder.",
         "back_to_workflows": "Back to Main Menu",
         "hero_title": "Waybill Sorter",
         "hero_subtitle": "Sort waybills and create one bulk PDF in Excel order.",
@@ -2265,16 +2368,16 @@ I18N = {
         "status_driver_excel_loaded": "Excel loaded. Choose the scan image folder next.",
         "status_driver_ready": "Ready to fill driver numbers.",
         "status_driver_working": "Filling driver numbers...",
-        "status_unlock_start": "Choose the PDF folder to unlock.",
-        "status_unlock_ready": "Ready to unlock PDFs.",
-        "status_unlock_working": "Unlocking PDFs...",
+        "status_unlock_start": "Choose files or a folder to unlock.",
+        "status_unlock_ready": "Ready to unlock files.",
+        "status_unlock_working": "Unlocking files...",
         "section_excel": "1. Excel",
         "section_pdf": "2. PDF Folder",
         "section_options": "3. Actions",
         "section_log": "Activity",
         "section_driver_excel": "1. Excel",
         "section_driver_images": "2. Scan Images",
-        "section_unlock_pdf": "1. PDF Folder",
+        "section_unlock_pdf": "1. Files or Folder",
         "section_unlock_actions": "2. Actions",
         "driver_images": "Image files",
         "blank_car_numbers": "Blank car numbers",
@@ -2296,12 +2399,16 @@ I18N = {
         "apply": "Apply",
         "cancel": "Cancel",
         "choose_folder": "Choose PDF Folder",
+        "choose_unlock_files": "Choose Files",
+        "choose_unlock_folder": "Choose Folder",
+        "unlock_password": "Password (if required)",
+        "unlock_files_count": "Supported files",
         "choose_pdf_in_folder": "Select any PDF in the folder",
         "copy_amount": "Excel supplementary count",
         "container_rows": "Container rows",
         "pdf_files": "PDF files",
         "pdf_page_check": "Downloaded PDF check",
-        "unlock_pdfs": "Unlock PDFs",
+        "unlock_pdfs": "Unlock Files",
         "mark_sequence": "Digitally mark sequence on forms 1 and 4",
         "separators": "Add separator page between waybills",
         "sort": "Sort Waybills",
@@ -2351,16 +2458,16 @@ I18N = {
         "missing_excel": "Choose the Excel file first.",
         "missing_folder_title": "Missing PDF Folder",
         "missing_folder": "Choose the folder containing the PDF waybills.",
-        "missing_unlock_folder": "Choose the folder containing the PDFs to unlock.",
+        "missing_unlock_folder": "Choose one or more PDF/Excel files or a folder containing them.",
         "missing_sort_title": "Nothing Sorted Yet",
         "missing_sort": "Sort the waybills before creating a bulk PDF.",
         "excel_problem": "Excel Problem",
         "sort_failed": "Sort Failed",
         "pdf_failed": "Bulk PDF Failed",
-        "unlock_failed": "PDF Unlock Failed",
+        "unlock_failed": "File Unlock Failed",
         "sort_finished": "Sort Finished",
         "pdf_finished": "Bulk PDF Created",
-        "unlock_finished": "PDF Unlock Finished",
+        "unlock_finished": "File Unlock Finished",
         "sort_finished_msg": "Sorted folder:\n{sorted_dir}\n\nMatched PDFs: {matched}\nVerified exact copies: {verified}/{matched}\nMissing containers: {missing}\nUnmatched PDFs: {unmatched}",
         "pdf_finished_msg": "Bulk PDF:\n{path}\n\nPages: {pages}\nSeparator pages: {separators}\n\nOpen this PDF in Chrome or Adobe Reader to print.",
         "unlock_finished_msg": "Output folder:\n{output_dir}\n\nUnlocked: {unlocked}\nAlready unlocked copied: {already}\nSkipped password-required: {skipped}\nFailed: {failed}\n\nReport:\n{report}",
@@ -2380,12 +2487,12 @@ I18N = {
         "log_image_count": "Image files: {count}",
         "log_starting_sort": "Starting sort.",
         "log_starting_driver_fill": "Starting driver number fill.",
-        "log_starting_unlock": "Starting PDF unlock.",
+        "log_starting_unlock": "Starting file unlock.",
         "log_output": "Output: {path}",
         "log_print_pdf": "Bulk PDF: {path}",
-        "log_unlock_pdf_folder": "Unlock PDF folder loaded: {path}",
+        "log_unlock_pdf_folder": "Unlock input loaded: {path}",
         "progress_print_pdf": "Creating bulk PDF: {percent}% ({current}/{total})",
-        "progress_unlock_pdf": "Unlocking PDFs: {percent}% ({current}/{total})",
+        "progress_unlock_pdf": "Unlocking files: {percent}% ({current}/{total})",
         "log_copy_verification": "Copy verification: {verified}/{total} sorted PDFs are byte-for-byte identical to the downloads.",
         "pdf_check_unknown": "-",
         "pdf_check_uniform": "{pages} pages per PDF; detected supplementary count {detected}; Excel says {excel}; {status}",
@@ -2402,8 +2509,8 @@ I18N = {
         "workflow_sort_desc": "按照 Excel 顺序排序 PDF，并生成安全的合并 PDF。",
         "workflow_driver": "填写车号",
         "workflow_driver_desc": "读取运单扫描图片，并填写 Excel 中空白的车号。",
-        "workflow_unlock": "\u89e3\u9501 PDF",
-        "workflow_unlock_desc": "\u79fb\u9664\u4e0d\u9700\u6253\u5f00\u5bc6\u7801\u7684 PDF \u7f16\u8f91/\u6253\u5370\u9650\u5236\u3002",
+        "workflow_unlock": "\u89e3\u9501\u6587\u4ef6",
+        "workflow_unlock_desc": "\u79fb\u9664 PDF \u9650\u5236\u4ee5\u53ca Excel \u5de5\u4f5c\u7c3f/\u5de5\u4f5c\u8868\u4fdd\u62a4\uff0c\u652f\u6301\u9009\u62e9\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u3002",
         "back_to_workflows": "返回主菜单",
         "hero_title": "运单排序工具",
         "hero_subtitle": "按照 Excel 顺序整理运单，并生成一个合并 PDF。",
@@ -2417,16 +2524,16 @@ I18N = {
         "status_driver_excel_loaded": "Excel 已读取。下一步请选择扫描图片文件夹。",
         "status_driver_ready": "已准备好，可以填写车号。",
         "status_driver_working": "正在填写车号...",
-        "status_unlock_start": "\u8bf7\u9009\u62e9\u8981\u89e3\u9501\u7684 PDF \u6587\u4ef6\u5939\u3002",
-        "status_unlock_ready": "\u5df2\u51c6\u5907\u597d\uff0c\u53ef\u4ee5\u89e3\u9501 PDF\u3002",
-        "status_unlock_working": "\u6b63\u5728\u89e3\u9501 PDF...",
+        "status_unlock_start": "\u8bf7\u9009\u62e9\u8981\u89e3\u9501\u7684\u6587\u4ef6\u6216\u6587\u4ef6\u5939\u3002",
+        "status_unlock_ready": "\u5df2\u51c6\u5907\u597d\uff0c\u53ef\u4ee5\u89e3\u9501\u6587\u4ef6\u3002",
+        "status_unlock_working": "\u6b63\u5728\u89e3\u9501\u6587\u4ef6...",
         "section_excel": "1. Excel",
         "section_pdf": "2. PDF 文件夹",
         "section_options": "3. 操作",
         "section_log": "操作记录",
         "section_driver_excel": "1. Excel",
         "section_driver_images": "2. 扫描图片",
-        "section_unlock_pdf": "1. PDF \u6587\u4ef6\u5939",
+        "section_unlock_pdf": "1. \u6587\u4ef6\u6216\u6587\u4ef6\u5939",
         "section_unlock_actions": "2. \u64cd\u4f5c",
         "driver_images": "图片文件数",
         "blank_car_numbers": "空白车号",
@@ -2448,12 +2555,16 @@ I18N = {
         "apply": "应用",
         "cancel": "取消",
         "choose_folder": "选择 PDF 文件夹",
+        "choose_unlock_files": "选择文件",
+        "choose_unlock_folder": "选择文件夹",
+        "unlock_password": "密码（如需要）",
+        "unlock_files_count": "支持的文件",
         "choose_pdf_in_folder": "请选择该文件夹中的任意 PDF",
         "copy_amount": "Excel 补充文件数",
         "container_rows": "箱号行数",
         "pdf_files": "PDF 文件数",
         "pdf_page_check": "下载 PDF 检查",
-        "unlock_pdfs": "\u89e3\u9501 PDF",
+        "unlock_pdfs": "\u89e3\u9501\u6587\u4ef6",
         "mark_sequence": "在第 1 和第 4 联添加电子序号",
         "separators": "每票之间加入分隔页",
         "sort": "排序运单",
@@ -2504,16 +2615,16 @@ I18N = {
         "missing_excel": "请先选择 Excel 文件。",
         "missing_folder_title": "缺少 PDF 文件夹",
         "missing_folder": "请选择包含 PDF 运单的文件夹。",
-        "missing_unlock_folder": "\u8bf7\u9009\u62e9\u5305\u542b\u8981\u89e3\u9501 PDF \u7684\u6587\u4ef6\u5939\u3002",
+        "missing_unlock_folder": "\u8bf7\u9009\u62e9\u4e00\u4e2a\u6216\u591a\u4e2a PDF/Excel \u6587\u4ef6\uff0c\u6216\u5305\u542b\u76f8\u5173\u6587\u4ef6\u7684\u6587\u4ef6\u5939\u3002",
         "missing_sort_title": "尚未排序",
         "missing_sort": "请先排序运单，再生成合并 PDF。",
         "excel_problem": "Excel 问题",
         "sort_failed": "排序失败",
         "pdf_failed": "合并 PDF 生成失败",
-        "unlock_failed": "PDF \u89e3\u9501\u5931\u8d25",
+        "unlock_failed": "\u6587\u4ef6\u89e3\u9501\u5931\u8d25",
         "sort_finished": "排序完成",
         "pdf_finished": "合并 PDF 已生成",
-        "unlock_finished": "PDF \u89e3\u9501\u5b8c\u6210",
+        "unlock_finished": "\u6587\u4ef6\u89e3\u9501\u5b8c\u6210",
         "sort_finished_msg": "排序文件夹：\n{sorted_dir}\n\n已匹配 PDF：{matched}\n精确副本校验：{verified}/{matched}\n缺少箱号：{missing}\n未匹配 PDF：{unmatched}",
         "pdf_finished_msg": "合并 PDF：\n{path}\n\n页数：{pages}\n分隔页：{separators}\n\n请用 Chrome 或 Adobe Reader 打开后打印。",
         "unlock_finished_msg": "\u8f93\u51fa\u6587\u4ef6\u5939\uff1a\n{output_dir}\n\n\u5df2\u89e3\u9501\uff1a{unlocked}\n\u5df2\u53ef\u7528\u5e76\u5df2\u590d\u5236\uff1a{already}\n\u9700\u8981\u6253\u5f00\u5bc6\u7801\u5df2\u8df3\u8fc7\uff1a{skipped}\n\u5931\u8d25\uff1a{failed}\n\n\u62a5\u544a\uff1a\n{report}",
@@ -2533,12 +2644,12 @@ I18N = {
         "log_image_count": "图片文件数：{count}",
         "log_starting_sort": "开始排序。",
         "log_starting_driver_fill": "开始填写车号。",
-        "log_starting_unlock": "\u5f00\u59cb\u89e3\u9501 PDF\u3002",
+        "log_starting_unlock": "\u5f00\u59cb\u89e3\u9501\u6587\u4ef6\u3002",
         "log_output": "输出：{path}",
         "log_print_pdf": "合并 PDF：{path}",
-        "log_unlock_pdf_folder": "\u5df2\u9009\u62e9\u89e3\u9501 PDF \u6587\u4ef6\u5939\uff1a{path}",
+        "log_unlock_pdf_folder": "\u5df2\u9009\u62e9\u89e3\u9501\u8f93\u5165\uff1a{path}",
         "progress_print_pdf": "正在生成合并 PDF：{percent}%（{current}/{total}）",
-        "progress_unlock_pdf": "\u6b63\u5728\u89e3\u9501 PDF\uff1a{percent}%\uff08{current}/{total}\uff09",
+        "progress_unlock_pdf": "\u6b63\u5728\u89e3\u9501\u6587\u4ef6\uff1a{percent}%\uff08{current}/{total}\uff09",
         "log_copy_verification": "复制校验：{verified}/{total} 个排序 PDF 与下载文件逐字节一致。",
         "pdf_check_unknown": "-",
         "pdf_check_uniform": "每个 PDF {pages} 页；检测补充文件数 {detected}；Excel 显示 {excel}；{status}",
@@ -2584,7 +2695,9 @@ class WaybillSorterApp(tk.Tk):
         self.driver_blank_count = tk.StringVar(value="-")
         self.driver_image_count = tk.StringVar(value="-")
         self.latest_driver_result: DriverFillResult | None = None
-        self.unlock_folder_path = tk.StringVar()
+        self.unlock_file_paths: tuple[Path, ...] = ()
+        self.unlock_source_label = tk.StringVar()
+        self.unlock_password = tk.StringVar()
         self.unlock_pdf_count = tk.StringVar(value="-")
         self.latest_unlock_result: PdfUnlockResult | None = None
         self.options_window: tk.Toplevel | None = None
@@ -2843,6 +2956,37 @@ class WaybillSorterApp(tk.Tk):
             cursor="hand2",
         )
 
+    def _header_control(
+        self,
+        parent: tk.Widget,
+        key: str,
+        text: str,
+        command: Callable[[], None],
+        theme_button: bool = False,
+    ) -> tk.Frame:
+        """Put a changing header label in a fixed-size pixel box."""
+        from tkinter import font as tkfont
+
+        variants = [str(language.get(key, "")) for language in I18N.values()]
+        if theme_button:
+            variants = [
+                f"{icon}  {language.get(label_key, '')}"
+                for language in I18N.values()
+                for icon, label_key in (("☀", "theme_to_light"), ("☾", "theme_to_dark"))
+            ]
+        label_font = tkfont.Font(root=self, font=("Segoe UI", 11, "bold"))
+        width = max((label_font.measure(label) for label in variants), default=0) + 48
+        shell = tk.Frame(parent, bg=SURFACE, width=width, height=44)
+        shell.grid_propagate(False)
+        button = (
+            self._theme_button(shell)
+            if theme_button
+            else self._secondary_button(shell, text, command)
+        )
+        button.configure(width=0)
+        button.pack(fill=tk.BOTH, expand=True)
+        return shell
+
     def _back_button(self, parent: tk.Widget) -> tk.Button:
         """A clearly visible 'back to the main menu' button.
 
@@ -3035,14 +3179,16 @@ class WaybillSorterApp(tk.Tk):
             font=("Segoe UI", 11),
             anchor="w",
         ).pack(fill=tk.X, pady=(2, 0))
-        self._secondary_button(hero, self.tr("settings"), self.open_settings).grid(
+        self._header_control(hero, "settings", self.tr("settings"), self.open_settings).grid(
             row=0,
             column=4,
             sticky="e",
             padx=(0, 18),
         )
-        self._theme_button(hero).grid(row=0, column=3, sticky="e", padx=(0, 14))
-        self._secondary_button(hero, self.tr("language"), self.toggle_language).grid(
+        self._header_control(hero, "theme", "", self.toggle_theme, theme_button=True).grid(
+            row=0, column=3, sticky="e", padx=(0, 14)
+        )
+        self._header_control(hero, "language", self.tr("language"), self.toggle_language).grid(
             row=0,
             column=2,
             sticky="e",
@@ -3228,11 +3374,36 @@ class WaybillSorterApp(tk.Tk):
 
         folder_shell, folder_body = self._card(outer, self.tr("section_unlock_pdf"))
         folder_shell.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        self._path_row(
-            folder_body, self.tr("choose_folder"), self.choose_unlock_pdf_folder,
-            self.unlock_folder_path, label_key="choose_folder",
+        chooser_row = tk.Frame(folder_body, bg=SURFACE)
+        chooser_row.grid(row=0, column=0, columnspan=2, sticky="ew")
+        chooser_row.columnconfigure(2, weight=1)
+        for column, key, command in (
+            (0, "choose_unlock_files", self.choose_unlock_files),
+            (1, "choose_unlock_folder", self.choose_unlock_folder),
+        ):
+            button = self._primary_button(
+                chooser_row, self.tr(key), command, compact=True, label_key=key
+            )
+            button.configure(width=0)
+            button.grid(row=0, column=column, sticky="ew", padx=(0, 8))
+            chooser_row.columnconfigure(column, minsize=self._action_button_width())
+        source_entry = tk.Entry(
+            chooser_row, textvariable=self.unlock_source_label, state="readonly",
+            readonlybackground=BG_LIST, fg=TEXT_ENTRY, relief=tk.FLAT,
+            font=("Segoe UI", 11),
         )
-        self._stat(folder_body, 1, self.tr("pdf_files"), self.unlock_pdf_count)
+        source_entry.grid(row=0, column=2, sticky="ew", ipady=12)
+        password_row = tk.Frame(folder_body, bg=SURFACE)
+        password_row.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(10, 0))
+        tk.Label(
+            password_row, text=self.tr("unlock_password"), bg=SURFACE,
+            fg=TEXT_LABEL, font=("Segoe UI", 10),
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        tk.Entry(
+            password_row, textvariable=self.unlock_password, show="*",
+            bg=BG_LIST, fg=TEXT_ENTRY, relief=tk.FLAT, font=("Segoe UI", 11),
+        ).pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=8)
+        self._stat(folder_body, 2, self.tr("unlock_files_count"), self.unlock_pdf_count)
 
         lower = tk.Frame(outer, bg=BG_WINDOW)
         lower.grid(row=1, column=0, sticky="nsew")
@@ -3659,6 +3830,9 @@ class WaybillSorterApp(tk.Tk):
         window.configure(bg=SURFACE)
         window.resizable(False, False)
         window.transient(self)
+        # Keep the dialog's outer frame constant across both languages; its
+        # labels and button captions change, but Windows never resizes it.
+        window.geometry("540x680")
 
         body = tk.Frame(window, bg=SURFACE, padx=22, pady=20)
         body.pack(fill=tk.BOTH, expand=True)
@@ -3902,9 +4076,6 @@ class WaybillSorterApp(tk.Tk):
         apply_theme(name)
         self.configure(bg=BG_WINDOW)
         self._rebuild_current_screen()
-        # The Settings window is closed by the rebuild, so reopen it: the user
-        # is mid-task in that dialog and should not lose their place.
-        self.open_settings()
 
     def _set_startup_monitor(self, index: int) -> None:
         """Persist the chosen startup display."""
@@ -4040,11 +4211,11 @@ class WaybillSorterApp(tk.Tk):
             (r"^Excel supplementary count: (.+)$", "Excel 补充文件数：{0}"),
             (r"^Container rows: (.+)$", "箱号行数：{0}"),
             (r"^PDF folder loaded: (.+)$", "已选择 PDF 文件夹：{0}"),
-            (r"^Unlock PDF folder loaded: (.+)$", "已选择解锁 PDF 文件夹：{0}"),
+            (r"^Unlock input loaded: (.+)$", "已选择解锁输入：{0}"),
             (r"^PDF files: (.+)$", "PDF 文件数：{0}"),
             (r"^Downloaded PDF check: (.+)$", "下载 PDF 检查：{0}"),
             (r"^Starting sort\.$", "开始排序。"),
-            (r"^Starting PDF unlock\.$", "开始解锁 PDF。"),
+            (r"^Starting file unlock\.$", "开始解锁文件。"),
             (r"^Driver Excel loaded: (.+)$", "车号 Excel 已读取：{0}"),
             (r"^Driver workflow rows: (.+); blank car numbers: (.+)$", "车号流程行数：{0}；空白车号：{1}"),
             (r"^Rows already containing car numbers: (.+)$", "已有车号的行数：{0}"),
@@ -4060,10 +4231,10 @@ class WaybillSorterApp(tk.Tk):
             (r"^Output: (.+)$", "输出：{0}"),
             (r"^Bulk PDF: (.+)$", "合并 PDF：{0}"),
             (r"^Creating bulk PDF: (\d+)% \((\d+)/(\d+)\)$", "正在生成合并 PDF：{0}%（{1}/{2}）"),
-            (r"^Unlocking PDFs: (\d+)% \((\d+)/(\d+)\)$", "正在解锁 PDF：{0}%（{1}/{2}）"),
+            (r"^Unlocking files: (\d+)% \((\d+)/(\d+)\)$", "正在解锁文件：{0}%（{1}/{2}）"),
             (r"^Loaded (\d+) container rows from Excel\.$", "已从 Excel 读取 {0} 个箱号。"),
             (r"^Scanning (\d+) PDF files\.$", "正在扫描 {0} 个 PDF 文件。"),
-            (r"^Scanning (\d+) PDF files for removable PDF encryption\.$", "正在检查 {0} 个 PDF 文件是否可解锁。"),
+            (r"^Scanning (\d+) PDF and Excel files for removable protection\.$", "正在检查 {0} 个 PDF 和 Excel 文件是否可解锁。"),
             (r"^Finished\. Sorted files are in: (.+)$", "完成。排序文件夹：{0}"),
             (r"^Check sort_report\.csv for missing or unmatched files\.$", "请查看 sort_report.csv 中缺少或未匹配的文件。"),
             (r"^Creating bulk PDF from sorted waybills\.$", "正在按排序结果生成合并 PDF。"),
@@ -4072,8 +4243,8 @@ class WaybillSorterApp(tk.Tk):
             (r"^Safe bulk PDF mode: original PDF pages only; no separator pages or digital sequence marks\.$", "安全合并 PDF 模式：只使用原始 PDF 页面，不加分隔页或电子序号。"),
             (r"^Optional bulk PDF extras enabled: (.+)\.$", "已开启可选合并 PDF 功能：{0}。"),
             (
-                r"^PDF unlock finished: (\d+) unlocked; (\d+) already unlocked; (\d+) skipped; (\d+) failed\.$",
-                "PDF 解锁完成：已解锁 {0}；已可用 {1}；已跳过 {2}；失败 {3}。",
+                r"^File unlock finished: (\d+) unlocked; (\d+) already unlocked; (\d+) skipped; (\d+) failed\.$",
+                "文件解锁完成：已解锁 {0}；已可用 {1}；已跳过 {2}；失败 {3}。",
             ),
         )
         for pattern, replacement in patterns:
@@ -4134,6 +4305,7 @@ class WaybillSorterApp(tk.Tk):
         from module-level state as widgets are created, so the window is torn
         down and rebuilt. Two things must be handled explicitly.
         """
+        settings_was_open = self._button_exists("settings_window")
         # Open dialogs are rebuilt in the new language or colours when reopened,
         # so close them rather than leaving stale ones behind. The update-check
         # token is bumped so a result arriving for a destroyed window is
@@ -4157,16 +4329,44 @@ class WaybillSorterApp(tk.Tk):
         # same-sized window - which is why switching language moved the app to
         # the other screen. Capture, rebuild, restore.
         saved = self._window_geometry()
-        self._clear_window()
-        if workflow == "sort":
-            self._build_ui()
-        elif workflow == "driver":
-            self._build_driver_ui()
-        elif workflow == "unlock":
-            self._build_unlock_ui()
-        else:
-            self._build_workflow_selector()
-        self._restore_window_geometry(saved)
+        alpha: float | None = None
+        withdrawn = False
+        try:
+            alpha = float(self.attributes("-alpha"))
+            self.attributes("-alpha", 0.0)
+        except (tk.TclError, TypeError, ValueError):
+            alpha = None
+            try:
+                self.withdraw()
+                withdrawn = True
+            except tk.TclError:
+                pass
+        try:
+            self._clear_window()
+            if workflow == "sort":
+                self._build_ui()
+            elif workflow == "driver":
+                self._build_driver_ui()
+            elif workflow == "unlock":
+                self._build_unlock_ui()
+            else:
+                self._build_workflow_selector()
+            self._restore_window_geometry(saved)
+            self.update_idletasks()
+            if settings_was_open:
+                self.open_settings()
+                self.update_idletasks()
+        finally:
+            if alpha is not None:
+                try:
+                    self.attributes("-alpha", alpha)
+                except tk.TclError:
+                    pass
+            elif withdrawn:
+                try:
+                    self.deiconify()
+                except tk.TclError:
+                    pass
         if workflow == "sort" and self.pdf_folder.get():
             self.update_pdf_folder_analysis(Path(self.pdf_folder.get()), log=False)
 
@@ -4231,7 +4431,7 @@ class WaybillSorterApp(tk.Tk):
             self._set_primary_button_enabled(self.driver_fill_button, can_act and ready)
             self._set_primary_button_enabled(self.driver_open_output_button, can_act and self.latest_driver_result is not None)
         if self._button_exists("unlock_button"):
-            ready = bool(self.unlock_folder_path.get())
+            ready = bool(self.unlock_file_paths)
             self._set_primary_button_enabled(self.unlock_button, can_act and ready)
             self._set_primary_button_enabled(
                 self.unlock_open_output_button,
@@ -4337,45 +4537,81 @@ class WaybillSorterApp(tk.Tk):
         except Exception as exc:
             messagebox.showerror(self.tr("driver_fill_failed"), str(exc))
 
-    def choose_unlock_pdf_folder(self) -> None:
+    def _set_unlock_sources(self, sources: Iterable[Path], label: str) -> None:
+        self.unlock_file_paths = tuple(Path(path) for path in sources)
+        self.unlock_source_label.set(label)
+        file_count = 0
+        for path in self.unlock_file_paths:
+            if path.is_file() and path.suffix.lower() in UNLOCKABLE_EXTENSIONS:
+                file_count += 1
+            elif path.is_dir():
+                file_count += sum(
+                    1 for item in path.rglob("*")
+                    if item.is_file() and item.suffix.lower() in UNLOCKABLE_EXTENSIONS
+                    and not any(part.startswith("unlocked_files_") for part in item.relative_to(path).parts)
+                )
+        self.unlock_pdf_count.set(str(file_count))
+        self.latest_unlock_result = None
+        self.set_status("status_unlock_ready")
+        self.append_log(f"Unlock input loaded: {label}")
+        self.append_log(f"Selected paths: {len(self.unlock_file_paths)}")
+        self.update_action_state()
+
+    def choose_unlock_files(self) -> None:
         if self.worker_running:
             return
-        initial_dir = self.unlock_folder_path.get()
-        dialog_options = {"title": self.tr("choose_folder")}
+        initial_dir = str(self.unlock_file_paths[0].parent) if self.unlock_file_paths else ""
+        dialog_options = {
+            "title": self.tr("choose_unlock_files"),
+            "filetypes": [
+                ("Supported files", "*.pdf *.xlsx *.xlsm *.xltx *.xltm"),
+                ("PDF files", "*.pdf"),
+                ("Excel files", "*.xlsx *.xlsm *.xltx *.xltm"),
+                ("All files", "*.*"),
+            ],
+        }
+        if initial_dir:
+            dialog_options["initialdir"] = initial_dir
+        selected = filedialog.askopenfilenames(**dialog_options)
+        if not selected:
+            return
+        paths = tuple(Path(path) for path in selected if Path(path).suffix.lower() in UNLOCKABLE_EXTENSIONS)
+        self._set_unlock_sources(paths, f"{len(paths)} file(s) selected")
+
+    def choose_unlock_folder(self) -> None:
+        if self.worker_running:
+            return
+        initial_dir = str(self.unlock_file_paths[0]) if self.unlock_file_paths and self.unlock_file_paths[0].is_dir() else ""
+        dialog_options = {"title": self.tr("choose_unlock_folder")}
         if initial_dir:
             dialog_options["initialdir"] = initial_dir
         selected = filedialog.askdirectory(**dialog_options)
         if not selected:
             return
         folder = Path(selected)
-        pdf_count = len([item for item in folder.iterdir() if item.is_file() and item.suffix.lower() == ".pdf"])
-        self.unlock_folder_path.set(str(folder))
-        self.unlock_pdf_count.set(str(pdf_count))
-        self.latest_unlock_result = None
-        self.set_status("status_unlock_ready")
-        self.append_log(f"Unlock PDF folder loaded: {folder}")
-        self.append_log(f"PDF files: {pdf_count}")
-        self.update_action_state()
+        self._set_unlock_sources((folder,), str(folder))
 
-    def validate_unlock_inputs(self) -> Path | None:
-        if not self.unlock_folder_path.get():
+    def validate_unlock_inputs(self) -> tuple[Path, ...] | None:
+        if not self.unlock_file_paths:
             messagebox.showwarning(self.tr("missing_folder_title"), self.tr("missing_unlock_folder"))
             return None
-        return Path(self.unlock_folder_path.get())
+        return self.unlock_file_paths
 
     def start_unlock_pdfs(self) -> None:
-        pdf_folder = self.validate_unlock_inputs()
-        if pdf_folder is None or self.worker_running:
+        sources = self.validate_unlock_inputs()
+        if sources is None or self.worker_running:
             return
 
         self.set_busy(True, "status_unlock_working")
         self.set_progress(0, "0%")
-        self.append_log("Starting PDF unlock.")
+        self.append_log("Starting file unlock.")
+        password = self.unlock_password.get()
 
         def worker() -> None:
             try:
-                result = unlock_pdf_folder(
-                    pdf_folder,
+                result = unlock_files(
+                    sources,
+                    password=password,
                     log=lambda message: self.worker_queue.put(("log", message)),
                     progress=lambda current, total: self.worker_queue.put(("unlock_progress", (current, total))),
                 )
@@ -4704,7 +4940,7 @@ class WaybillSorterApp(tk.Tk):
                     text = f"{percent}% ({current}/{total})"
                     self.set_progress(percent, text)
                     if current == total or current == 1 or current % 5 == 0:
-                        self.append_log(f"Unlocking PDFs: {percent}% ({current}/{total})")
+                        self.append_log(f"Unlocking files: {percent}% ({current}/{total})")
                 elif kind == "error":
                     self.set_busy(False)
                     self.status_text.set(self.tr("sort_failed"))
@@ -4748,7 +4984,7 @@ class WaybillSorterApp(tk.Tk):
                     result = payload
                     assert isinstance(result, PdfUnlockResult)
                     self.latest_unlock_result = result
-                    self.set_busy(False, "status_finished")
+                    self.set_busy(False, "status_unlock_ready")
                     self.set_progress(100, "100%")
                     self.append_log(f"Output: {result.output_dir}")
                     messagebox.showinfo(
@@ -4829,9 +5065,11 @@ def run_cli(args: argparse.Namespace) -> int:
 
 
 def run_unlock_cli(args: argparse.Namespace) -> int:
-    result = unlock_pdf_folder(
-        Path(args.pdf_folder),
-        Path(args.output) if args.output else None,
+    unlock_source = args.unlock_source or args.pdf_folder
+    result = unlock_files(
+        (Path(unlock_source),),
+        password=args.password or "",
+        output_root=Path(args.output) if args.output else None,
         log=print,
     )
     print(f"Output: {result.output_dir}")
@@ -4848,7 +5086,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--separators", action="store_true", help="Add separator pages between waybills.")
     parser.add_argument("--make-print-pdf", action="store_true", help="Create one bulk PDF after sorting.")
     parser.add_argument("--mark-sequence", action="store_true", help="Stamp the sequence number on detected form 1 and form 4 pages.")
-    parser.add_argument("--unlock-pdfs", action="store_true", help="Remove blank-password/permissions encryption from a PDF folder.")
+    parser.add_argument("--unlock-pdfs", action="store_true", help="Unlock supported PDF and Excel files from a file or folder (legacy flag name).")
+    parser.add_argument("--unlock-source", help="PDF/Excel file or folder to unlock.")
+    parser.add_argument("--password", help="Optional password for encrypted PDF/Excel files.")
     parser.add_argument("--check-updates", action="store_true", help="Check GitHub for a newer release and exit.")
     return parser.parse_args(argv)
 
@@ -4901,8 +5141,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {exc}", file=sys.stderr)
             return 1
     if args.unlock_pdfs:
-        if not args.pdf_folder:
-            print("--unlock-pdfs requires --pdf-folder.", file=sys.stderr)
+        if not (args.unlock_source or args.pdf_folder):
+            print("--unlock-pdfs requires --unlock-source (or legacy --pdf-folder).", file=sys.stderr)
             return 1
         try:
             return run_unlock_cli(args)

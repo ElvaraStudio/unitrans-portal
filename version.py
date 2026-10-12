@@ -33,7 +33,7 @@ from typing import Iterable, Sequence
 # --------------------------------------------------------------------------
 
 APP_NAME = "Unitrans Portal"
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.4.1"
 
 #: True while the version is still 0.x. Drives the "(Beta)" suffix in the UI.
 BETA = True
@@ -43,7 +43,7 @@ COPYRIGHT = "\u00a9 2026 Unitrans / Elvara Studio"
 
 #: Used by the exe version resource and the installer. Kept separate from
 #: APP_NAME because Windows also wants a short, filename-safe description.
-FILE_DESCRIPTION = "Unitrans Portal - waybill sorting and PDF preparation"
+FILE_DESCRIPTION = "Unitrans Portal - waybill sorting, file unlocking and PDF preparation"
 
 #: Folder name created under %LOCALAPPDATA%\Programs by the installer.
 INSTALL_DIR_NAME = APP_NAME

@@ -3,6 +3,52 @@
   "app": "Unitrans Portal",
   "releases": [
     {
+      "version": "0.4.1",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Smoother language switching",
+        "notes": [
+          "Language and theme changes no longer show the interface while its controls are being rebuilt.",
+          "The Language, theme, and Settings buttons keep the same size when switching between English and Chinese.",
+          "The Settings window keeps a fixed size and stays open when you switch language or theme.",
+          "This release also includes the Unlock Files workflow for PDFs and Excel workbooks from version 0.4.0."
+        ]
+      },
+      "zh": {
+        "headline": "更流畅的语言切换",
+        "notes": [
+          "切换语言或主题时，不再显示界面控件重建过程中的空白状态。",
+          "在英文和中文之间切换时，语言、主题和设置按钮保持相同尺寸。",
+          "设置窗口保持固定尺寸，切换语言或主题时也会继续打开。",
+          "本版本还包括 0.4.0 中新增的 PDF 和 Excel 工作簿解锁功能。"
+        ]
+      }
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-10-12",
+      "kind": "beta",
+      "en": {
+        "headline": "Unlock PDFs and Excel files",
+        "notes": [
+          "The Unlock Files workflow now handles PDFs and Excel workbooks, including file-open passwords and workbook or worksheet protection.",
+          "Choose individual files or select a folder to process supported files in its subfolders.",
+          "Enter an optional password for encrypted files; unlocked copies, a summary, and a CSV report are saved to a new output folder.",
+          "A per-user Windows installer is now available for sharing with colleagues."
+        ]
+      },
+      "zh": {
+        "headline": "解锁 PDF 和 Excel 文件",
+        "notes": [
+          "新增通用解锁功能，可处理 PDF 和 Excel 工作簿，包括文件打开密码以及工作簿或工作表保护。",
+          "可选择单个或多个文件，也可选择文件夹以处理其中各级子文件夹的支持文件。",
+          "加密文件可输入密码；解锁后的副本、摘要和 CSV 报告会保存到新的输出文件夹。",
+          "现已支持生成可分享给同事的 Windows 用户级安装程序。"
+        ]
+      }
+    },
+    {
       "version": "0.3.0",
       "date": "2026-10-10",
       "kind": "beta",

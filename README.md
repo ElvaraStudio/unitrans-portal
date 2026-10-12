@@ -3,9 +3,9 @@
 Windows tooling for preparing UniTrans shipping paperwork. It sorts downloaded
 PDF waybills into the same order as the Excel workbook, creates a single bulk
 PDF for printing, fills blank driver numbers from scanned waybill images, and
-removes permissions-style locks from folders of PDFs.
+removes protection from PDFs and Excel workbooks.
 
-**Version 0.1.0 (Beta)** — publisher Elvara Studio.
+**Version 0.4.1 (Beta)** — publisher Elvara Studio.
 
 > **Beta:** the version is `0.x.y`, which means the interface and behaviour can
 > still change between releases. Version numbering was restarted at 0.1.0; the
@@ -50,30 +50,37 @@ When separator pages are enabled, the bulk PDF order is: all pages for `001`, se
 
 The sequence mark option stamps the Excel sequence number on pages detected as form `1` and form `4`, using the form number printed at the top-left of each waybill page.
 
-## Unlock PDFs
+## Unlock files
 
-Choose `Unlock PDFs` from the first screen when a folder contains PDFs that open but cannot be edited, printed, or processed because of permissions-style encryption.
+Choose `Unlock Files` from the first screen. Select one or more files, or
+choose a folder to process supported files in it and its subfolders. The app
+supports PDFs and Excel `.xlsx`, `.xlsm`, `.xltx`, and `.xltm` workbooks.
 
-1. Click `Choose PDF Folder` and select the folder.
-2. Click `Unlock PDFs`.
-3. Use `Open Output Folder` to view the new timestamped output folder.
+Enter the password for any file that requires one before clicking `Unlock
+Files`. The app can remove Excel workbook-structure and worksheet protection.
+Legacy `.xls` files are not supported.
 
-The program creates:
+The program creates an `unlocked_files_YYYYMMDD_HHMMSS` folder beside the
+selected folder or first selected file. Inside it:
 
-`unlocked_pdfs_YYYYMMDD_HHMMSS`
-
-Inside it:
-
-- `Unlocked PDFs` contains unlocked/copied PDF files.
-- `unlock_report.csv` lists every source PDF, output PDF, status, page count, and note.
+- `Unlocked Files` contains unlocked/copied files.
+- `unlock_report.csv` lists each source, output, status, file type, and note.
 - `summary.txt` shows the totals.
 
-PDFs that open with a blank password are rewritten without encryption. PDFs that are already unlocked are copied unchanged. PDFs that require an unknown open password are skipped and listed in the report.
+Unlocked files are written as copies; originals are unchanged. Unprotected files
+are copied unchanged. Files that need a missing or incorrect open password are
+skipped and listed in the report.
 
 ## Version history
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.1 | 2026-10-12 | Smooth language/theme switching and fixed control sizes; includes PDF and Excel unlocking. |
+| 0.4.0 | 2026-10-12 | Unlock PDFs and Excel workbooks; accept file selections or folders; add a Windows installer. |
+| 0.3.0 | 2026-10-10 | Dark mode and theme improvements. |
+| 0.2.3 | 2026-10-10 | Header spacing and layout improvements. |
+| 0.2.2 | 2026-10-10 | Equal-sized buttons and layout improvements. |
+| 0.2.1 | 2026-10-10 | Display selection and window placement. |
 | 0.2.0 | 2026-10-10 | Settings window with a manual update check. |
 | 0.1.0 | 2026-10-10 | First beta release. Versioning restarted; app renamed to Unitrans Portal. |
 
@@ -115,7 +122,7 @@ implemented yet.
 From a terminal, the same check is available without the GUI:
 
 ```powershell
-.\releases\Unitrans-Portal-0.2.0.exe --check-updates
+.\releases\Unitrans-Portal-0.4.1.exe --check-updates
 ```
 
 Exit codes: `0` up to date, `2` update available, `1` the check failed. Being
@@ -124,7 +131,8 @@ crash — the check cannot interrupt work in progress.
 
 ## Building a release
 
-Run PowerShell from this folder:
+Run PowerShell from this folder. It creates a portable executable and, when
+Inno Setup is installed, a per-user installer in `releases` and Downloads:
 
 ```powershell
 .\build.ps1
@@ -138,6 +146,11 @@ The build:
 4. Writes `releases/Unitrans-Portal-<version>.exe` and prints its SHA-256.
 
 The intermediate build output is at `dist\Unitrans Portal.exe`.
+
+The installer is named `Unitrans-Portal-<version>-Setup.exe`. It installs to
+`%LOCALAPPDATA%\Programs\Unitrans Portal` and creates Start Menu shortcuts.
+To build it manually, install Inno Setup and run
+`iscc /DAppVersion=<version> installer.iss` from the project root.
 
 Then, to create the update manifest and publish:
 

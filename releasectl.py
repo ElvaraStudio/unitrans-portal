@@ -71,6 +71,12 @@ def artifact_path(version: str) -> Path:
     return RELEASES_DIR / f"{APP_NAME.replace(' ', '-')}-{version}.exe"
 
 
+def installer_path(version: str) -> Path:
+    from version import APP_NAME
+
+    return RELEASES_DIR / f"{APP_NAME.replace(' ', '-')}-{version}-Setup.exe"
+
+
 def build_manifest(version: str, repo: str = DEFAULT_REPO) -> dict:
     from version import APP_NAME, PUBLISHER, build_info
 
@@ -169,6 +175,9 @@ def cmd_publish(args: argparse.Namespace) -> int:
         "--title", title,
         "--notes-file", str(notes_path),
     ]
+    installer = installer_path(version)
+    if installer.exists():
+        command.insert(command.index(str(manifest_path)), str(installer))
     # Deliberately NOT setting --prerelease from the manifest's `beta` flag.
     # A GitHub pre-release is excluded from /releases/latest, which would make
     # this version invisible to the updater. `beta` describes the app's own
@@ -225,6 +234,16 @@ def render_release_notes(version: str, entry: dict) -> str:
         "The `.exe` runs on its own; no installation or Python is required.",
         "",
     ]
+    installer = installer_path(version)
+    if installer.exists():
+        lines += [
+            f"`{installer.name}` - Windows per-user installer ({installer.stat().st_size:,} bytes)",
+            "",
+            "SHA-256:",
+            "",
+            f"```\n{sha256_of(installer)}\n```",
+            "",
+        ]
     return "\n".join(lines)
 
 

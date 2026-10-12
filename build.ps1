@@ -171,6 +171,8 @@ if (-not (Test-Path $ReleaseDir)) { New-Item -ItemType Directory -Path $ReleaseD
 
 $SafeName = ($ProductName -replace '\s+', '-')
 $ReleaseExe = Join-Path $ReleaseDir "$SafeName-$Version.exe"
+$InstallerName = "$SafeName-$Version-Setup.exe"
+$ReleaseInstaller = Join-Path $ReleaseDir $InstallerName
 
 # A running copy of the app holds its own .exe open, so the copy below fails
 # with a bare "being used by another process". Fail early with something
@@ -204,9 +206,46 @@ foreach ($old in $Stale) {
     }
 }
 
+# Build a per-user installer when Inno Setup is installed. The portable exe
+# remains available as a separate artifact for users who prefer no installer.
+$InnoCommand = Get-Command iscc.exe -ErrorAction SilentlyContinue
+$InnoCompilerPath = if ($InnoCommand) { $InnoCommand.Source } else { $null }
+if (-not $InnoCompilerPath) {
+    foreach ($candidate in @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'),
+        (Join-Path $env:ProgramFiles 'Inno Setup 6\ISCC.exe')
+    )) {
+        if (Test-Path -LiteralPath $candidate) { $InnoCompilerPath = $candidate; break }
+    }
+}
+$ReleaseInstaller = $null
+$DownloadsInstaller = $null
+if ($InnoCompilerPath) {
+    Push-Location $Root
+    try {
+        & $InnoCompilerPath "/DAppVersion=$Version" (Join-Path $Root 'installer.iss')
+        if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed to build the installer.' }
+    } finally {
+        Pop-Location
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $ReleaseDir $InstallerName))) {
+        throw 'Inno Setup reported success but the installer was not created.'
+    }
+    $ReleaseInstaller = Join-Path $ReleaseDir $InstallerName
+} else {
+    Write-Warning 'Inno Setup was not found; the portable exe was built, but the installer was skipped. Install Inno Setup 6 and rerun build.ps1.'
+}
+
 $Hash = Get-FileHash -LiteralPath $ReleaseExe -Algorithm SHA256
 $SizeBytes = (Get-Item -LiteralPath $ReleaseExe).Length
 $SizeMb = [math]::Round($SizeBytes / 1MB, 1)
+$InstallerHash = $null
+$InstallerSizeMb = $null
+if ($ReleaseInstaller) {
+    $InstallerHash = Get-FileHash -LiteralPath $ReleaseInstaller -Algorithm SHA256
+    $InstallerSizeMb = [math]::Round((Get-Item -LiteralPath $ReleaseInstaller).Length / 1MB, 1)
+}
 
 # ---------------------------------------------------------------------------
 # Drop a copy in the Downloads folder for testing.
@@ -217,6 +256,7 @@ $SizeMb = [math]::Round($SizeBytes / 1MB, 1)
 # (the whole releases/ binary set is gitignored). Delete it any time.
 # ---------------------------------------------------------------------------
 $DownloadsCopy = $null
+$DownloadsInstaller = $null
 $DownloadsDir = Join-Path $env:USERPROFILE 'Downloads'
 if (Test-Path -LiteralPath $DownloadsDir) {
     $DownloadsCopy = Join-Path $DownloadsDir "$SafeName-$Version.exe"
@@ -225,6 +265,15 @@ if (Test-Path -LiteralPath $DownloadsDir) {
     } catch {
         Write-Warning "Could not copy to Downloads: $($_.Exception.Message)"
         $DownloadsCopy = $null
+    }
+    if ($ReleaseInstaller) {
+        $DownloadsInstaller = Join-Path $DownloadsDir $InstallerName
+        try {
+            Copy-Item -LiteralPath $ReleaseInstaller -Destination $DownloadsInstaller -Force
+        } catch {
+            Write-Warning "Could not copy installer to Downloads: $($_.Exception.Message)"
+            $DownloadsInstaller = $null
+        }
     }
 }
 
@@ -236,6 +285,12 @@ Write-Host "  dist         : $BuiltExe"
 Write-Host "  release      : $ReleaseExe"
 if ($DownloadsCopy) {
     Write-Host "  for testing  : $DownloadsCopy" -ForegroundColor Cyan
+}
+if ($ReleaseInstaller) {
+    Write-Host "  installer    : $ReleaseInstaller"
+    if ($DownloadsInstaller) { Write-Host "  share copy   : $DownloadsInstaller" -ForegroundColor Cyan }
+    Write-Host "  setup size   : $InstallerSizeMb MB"
+    Write-Host "  setup sha256 : $($InstallerHash.Hash)"
 }
 Write-Host "  size         : $SizeMb MB ($SizeBytes bytes)"
 Write-Host "  sha256       : $($Hash.Hash)"

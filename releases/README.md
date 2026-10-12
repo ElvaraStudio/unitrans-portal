@@ -19,7 +19,7 @@ Everything else here is a build artifact and can be deleted safely; run
 
 | Version | Artifact | Built | Size | SHA-256 |
 |---|---|---|---|---|
-| 0.2.1 | `Unitrans-Portal-0.2.1.exe` | 2026-10-10 | 23.3 MB | _(see `manifest.json`)_ |
+| 0.4.1 | `Unitrans-Portal-0.4.1.exe` and `Unitrans-Portal-0.4.1-Setup.exe` | 2026-10-12 | Built locally; see build output for sizes and hashes. |
 
 The hash of record is always the one in `manifest.json`, so there is only one
 place to check. `releasectl.py` refuses to publish if the artifact has changed
@@ -29,9 +29,15 @@ since the manifest was generated.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.4.1 | 2026-10-12 | Smooth language/theme switching and fixed control sizes; includes PDF and Excel unlocking. |
+| 0.4.0 | 2026-10-12 | Unlock PDFs and Excel workbooks; installer for sharing with colleagues. |
+| 0.3.0 | 2026-10-10 | Dark mode and theme improvements. |
+| 0.2.3 | 2026-10-10 | Header spacing and layout improvements. |
+| 0.2.2 | 2026-10-10 | Button and layout improvements. |
+| 0.2.1 | 2026-10-10 | Display selection and window placement. |
 | 0.2.1 | 2026-10-10 | Window no longer resizes or moves when switching language; focus-ring box removed; Back to Main Menu button; monitor selection in Settings. Opens windowed on the chosen display. |
 | 0.2.0 | 2026-10-10 | Settings window with a manual update check. |
-| 0.1.0 | 2026-10-10 | First beta. Versioning restarted from the old `1.0` label; app renamed to Unitrans Portal. |
+| 0.1.0 | 2026-10-10 | First beta. Version numbering restarted; app renamed to Unitrans Portal. |
 
 ## Retired builds
 
@@ -49,9 +55,8 @@ The old `UniTrans-Waybill-Sorter-transfer-20260615.zip` hand-off bundle had
 already been deleted before this cleanup; it contained the same executables plus
 source that is now in git.
 
-`build.ps1` retires superseded artifacts automatically, so this folder always
-describes exactly one build, and drops a copy in the Downloads folder for
-testing.
+`build.ps1` retires superseded exe artifacts automatically and drops copies of
+the portable exe and installer in the Downloads folder for sharing/testing.
 
 ## Rebuilding and publishing
 
@@ -64,9 +69,9 @@ From the project root:
 ```
 
 `build.ps1` recreates `.venv`, installs `requirements.txt`, regenerates the
-icon, and writes `releases\Unitrans-Portal-<version>.exe` with its SHA-256.
-`publish` creates the git tag and GitHub release and attaches the exe plus the
-manifest.
+icon, and writes a portable exe plus, when Inno Setup is installed, a
+per-user `-Setup.exe` installer. `publish` attaches the portable exe and
+manifest; share the setup exe separately with colleagues.
 
 Do **not** publish with `--prerelease`: GitHub hides pre-releases from
 `/releases/latest`, which is the URL the app's update check reads. A beta is a

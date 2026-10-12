@@ -20,9 +20,40 @@ behaviour can still change between versions.
   Today the app tells you an update exists and opens the download page.
 - Automatic update checks on launch. The setting is stored but the feature is
   not implemented; checking is manual.
-- Inno Setup installer, per-user, so no administrator rights are needed.
 - `progress_value` and `progress_text` are written but never displayed - there
   is no progress bar in the current UI. Either wire one up or remove them.
+
+## [0.4.1] - 2026-10-12
+
+### Fixed
+
+- Language and theme switches no longer expose the screen while Tkinter
+  destroys and recreates its widgets, eliminating the brief blank button boxes.
+- Header Language, theme, and Settings controls keep the same pixel dimensions
+  in both languages; the Settings window also keeps a fixed outer size.
+- Switching language or theme while Settings is open now keeps the dialog open.
+
+### Changed
+
+- Version advanced to 0.4.1 so the in-app update checker can find this release.
+
+## [0.4.0] - 2026-10-12
+
+### Added
+
+- **Unlock Files** handles PDF restrictions and Excel workbook or worksheet
+  protection. It accepts individual files, multiple selected files, or folders
+  (including subfolders), and saves copies with a CSV report and summary.
+- An optional password field handles file-open encryption for PDFs and Excel
+  workbooks. Password-required files are skipped when no valid password is
+  supplied.
+- A per-user Inno Setup installer can be built and shared with colleagues.
+
+### Changed
+
+- The unlock workflow is now named **Unlock Files** and supports `.xlsx`,
+  `.xlsm`, `.xltx` and `.xltm` files in addition to PDFs.
+- Version number advanced to 0.4.0.
 
 ## [0.3.0] - 2026-10-10
 
@@ -227,6 +258,8 @@ First beta release.
   permissions-style encryption.
 - English and Chinese interface.
 
-[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/ElvaraStudio/unitrans-portal/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.1
+[0.4.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.4.0
 [0.2.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ElvaraStudio/unitrans-portal/releases/tag/v0.1.0
